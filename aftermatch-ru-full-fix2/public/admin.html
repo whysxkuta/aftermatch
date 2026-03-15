@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Админка — LAN</title>
+  <link rel="stylesheet" href="/style.css" />
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+<div>
+        <div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div>
+</div>
+    </div>
+    <div class="nav">
+              
+      
+      <a href="/login.html">Вход</a>
+      <a href="/register.html">Регистрация</a>
+      </div>
+  </div>
+</div>
+
+<div class="container">
+<div class="card" style="max-width:760px;margin:0 auto;">
+  <h2 style="text-align:center;">Аккаунт администратора</h2>
+  <div class="small" style="text-align:center;">Можно менять ник и ФИО администратора.</div>
+  <div style="height:12px"></div>
+  <div class="row">
+    <div class="col"><input id="ad_nick" placeholder="Ник" /></div>
+  </div>
+  <div style="height:10px"></div>
+  <div class="row">
+    <div class="col"><input id="ad_last" placeholder="Фамилия" /></div>
+    <div class="col"><input id="ad_first" placeholder="Имя" /></div>
+    <div class="col"><input id="ad_mid" placeholder="Отчество" /></div>
+  </div>
+  <div style="height:10px"></div>
+  <button class="btn primary" onclick="saveAdmin()">Сохранить</button>
+  <div id="ad_err" class="small" style="margin-top:10px;"></div>
+</div>
+
+  <div class="row" style="align-items:center; justify-content:space-between;">
+    <h1>Админка</h1>
+    <div class="small"><a href="/">На главную</a> · </div>
+  </div>
+
+  <div id="me" class="card small">—</div>
+
+  <div class="card glow">
+    <h2>Логотип турнира</h2>
+    <div class="small">Загрузи PNG (лучше квадрат 256x256). Логотип появится в шапке на всех страницах.</div>
+    <hr/>
+    <div class="row">
+  <div class="col card">
+    <h2 style="text-align:center;">Создать турнир</h2>
+    <div class="small"></div>
+    <hr/>
+    <div class="row">
+      <div class="col"><input id="t_name" placeholder="PRIME CUP2" value="PRIME CUP2"/></div>
+      <div class="col">
+        <select id="t_mode">
+          <option value="5v5">5v5</option>
+          <option value="2v2">2v2</option>
+          <option value="1v1">1v1</option>
+        </select>
+      </div>
+      <div class="col">
+        <select id="t_bo">
+          <option value="3">BO3</option>
+          <option value="1">BO1</option>
+        </select>
+      </div>
+    </div>
+    <div style="height:10px"></div>
+    <div class="small">Пул карт (через запятую):</div>
+    <input id="t_maps" value="de_mirage,de_inferno,de_nuke,de_ancient,de_anubis,de_vertigo,de_dust2"/>
+    <div style="height:10px"></div>
+    <button class="btn primary" onclick="createTournament()">Создать турнир</button>
+    <div id="t_err" class="small" style="margin-top:10px;"></div>
+    <hr/>
+    <div class="small">Турниры:</div>
+    <div id="t_list" class="small">—</div>
+  </div>
+
+  <div class="col card">
+    <h2>Команды</h2>
+    <div class="small">Создай команды и назначь капитанов (капитан управляет veto).</div>
+    <hr/>
+    <div class="row">
+      <div class="col">
+        <div class="small">Турнир:</div>
+        <select id="team_tournament"></select>
+      </div>
+      <div class="col"><input id="team_name" placeholder="Название команды"/></div>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn primary" onclick="createTeam()">Создать команду</button>
+    <div id="team_err" class="small" style="margin-top:10px;"></div>
+
+    <hr/>
+    <div class="small">Назначить капитана:</div>
+    <div class="row">
+      <div class="col"><select id="captain_team"></select></div>
+      <div class="col"><select id="captain_user"></select></div>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn primary" onclick="setCaptain()">Назначить капитана</button>
+    <div id="cap_err" class="small" style="margin-top:10px;"></div>
+
+    <hr/>
+    <div class="small">Команды:</div>
+    <div id="team_list" class="small">—</div>
+  </div>
+</div>
+
+<hr/>
+  <div class="row">
+    <div class="col"><select id="m_tournament"></select></div>
+    <div class="col"><select id="m_teamA"></select></div>
+    <div class="col"><select id="m_teamB"></select></div>
+  </div>
+  <div style="height:10px"></div>
+  <button class="btn primary" onclick="createMatch()">Создать матч</button>
+  <div id="m_err" class="small" style="margin-top:10px;"></div>
+  <div id="m_link" class="code" style="margin-top:10px; display:none;"></div>
+  <button id="m_copy" class="btn" style="margin-top:10px; display:none;" onclick="copyMatch()">Copy</button>
+</div>
+
+<div class="row">
+      <div class="col"><input id="logoFile" type="file" accept="image/png" /></div>
+      <div class="col"><button class="btn primary" onclick="uploadLogo()">Загрузить логотип</button></div>
+    </div>
+    <div id="logoMsg" class="small" style="margin-top:10px;"></div>
+  </div>
+
+
+  <div class="row">
+    <div class="col card">
+      <h2>Серверы</h2>
+      <div class="small">Добавление серверов доступно только администратору (вход admin/admin).</div>
+      <hr/>
+      <div class="row">
+        <div class="col"><input id="s_name" placeholder="Server #3" /></div>
+        <div class="col"><input id="s_ip" placeholder="192.168.1.202" /></div>
+        <div class="col"><input id="s_port" placeholder="27015" /></div>
+      </div>
+      <button class="btn primary" onclick="addServer()">Добавить сервер</button>
+      <div id="err" class="small" style="margin-top:10px;"></div>
+      <hr/>
+      <div id="servers" class="small">Загрузка...</div>
+    </div>
+
+    <div class="col card">
+      <h2>Матч</h2>
+      <div class="small">Вставь matchId из seed.</div>
+      <hr/>
+      <input id="matchId" placeholder="matchId" />
+      <div style="height:10px"></div>
+      <button class="btn primary" onclick="openMatch()">Открыть Match Room</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function refreshMe() {
+  const r = await fetch("/api/auth/me", { credentials: "include" });
+  const d = await r.json();
+  const meEl = document.getElementById("me");
+  if (!d.user) {
+    meEl.innerHTML = `Ты не вошёл. <a href="/login.html">Войти</a> (нужен admin/admin)`;
+    return;
+  }
+  meEl.innerHTML = `Ты: <b>${d.user.nickname}</b> <span class="badge">${d.user.role}</span>`;
+}
+
+
+async function uploadLogo() {
+  const msg = document.getElementById("logoMsg");
+  msg.textContent = "";
+  const f = document.getElementById("logoFile").files[0];
+  if (!f) { msg.textContent = "Выбери PNG файл."; return; }
+  if (f.type !== "image/png") { msg.textContent = "Только PNG."; return; }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    const res = await fetch("/api/admin/logo", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ dataUrl })
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.error || "Ошибка"; return; }
+    msg.innerHTML = `Готово ✅ Обнови страницу (F5).`;
+  };
+  reader.readAsDataURL(f);
+}
+
+async function refreshServers() {
+  const el = document.getElementById("servers");
+  const res = await fetch("/api/servers", { credentials: "include" });
+  const rows = await res.json();
+  el.innerHTML = rows.map(s => `
+    <div class="card">
+      <div><b>${s.name}</b> <span class="badge">${s.ip}:${s.port}</span></div>
+      <div class="small">id: ${s.id}</div>
+    </div>
+  `).join("");
+}
+
+async function addServer() {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  const name = document.getElementById("s_name").value.trim();
+  const ip = document.getElementById("s_ip").value.trim();
+  const port = document.getElementById("s_port").value.trim();
+  const res = await fetch("/api/servers", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ name, ip, port: Number(port) })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  refreshServers();
+refreshTournamentsAndTeams();
+refreshPlayersForCaptain();
+}
+
+function openMatch() {
+  const id = document.getElementById("matchId").value.trim();
+  if (!id) return alert("Вставь matchId");
+  location.href = `/match.html?matchId=${encodeURIComponent(id)}`;
+}
+
+async function refreshTournamentsAndTeams() {
+  const tRes = await fetch("/api/tournaments", { credentials: "include" });
+  const tournaments = await tRes.json();
+
+  const tList = document.getElementById("t_list");
+  tList.innerHTML = tournaments.map(t => `
+    <div class="card">
+      <div><b>${t.name}</b></div>
+      <div class="small"><span class="badge">${t.mode}</span> <span class="badge accent">BO${t.bo}</span> <span class="badge">${(t.map_pool||[]).length} maps</span></div>
+      <div class="small">id: ${t.id}</div>
+    </div>
+  `).join("") || "—";
+
+  const selIds = ["team_tournament","m_tournament"];
+  for (const sid of selIds) {
+    const sel = document.getElementById(sid);
+    sel.innerHTML = tournaments.map(t => `<option value="${t.id}">${t.name} (${t.mode} • BO${t.bo})</option>`).join("");
+  }
+
+  const teamsRes = await fetch("/api/teams", { credentials: "include" });
+  const teams = await teamsRes.json();
+
+  document.getElementById("team_list").innerHTML = teams.map(t => `
+    <div class="card">
+      <div><b>${t.name}</b></div>
+      <div class="small"><span class="badge accent">${t.tournament_name}</span> <span class="badge">${t.mode}</span> <span class="badge">BO${t.bo}</span></div>
+      <div class="small">id: ${t.id} · <a href="/team.html?id=${t.id}">страница команды</a></div>
+    </div>
+  `).join("") || "—";
+
+  const capTeam = document.getElementById("captain_team");
+  capTeam.innerHTML = teams.map(t => `<option value="${t.id}">${t.name} (${t.tournament_name})</option>`).join("");
+
+  function fillMatchTeams() {
+    const tid = document.getElementById("m_tournament").value;
+    const filtered = teams.filter(x => x.tournament_id === tid);
+    document.getElementById("m_teamA").innerHTML = filtered.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+    document.getElementById("m_teamB").innerHTML = filtered.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  }
+  document.getElementById("m_tournament").onchange = fillMatchTeams;
+  fillMatchTeams();
+}
+
+async function refreshPlayersForCaptain() {
+  const res = await fetch("/api/players", { credentials: "include" });
+  const players = await res.json();
+  const sel = document.getElementById("captain_user");
+  sel.innerHTML = players.map(p => `<option value="${p.id}">${p.nickname} (${p.first_name} ${p.last_name})</option>`).join("");
+}
+
+async function uploadCover(tournamentId, file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(tournamentId)}/cover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ dataUrl })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "cover upload failed");
+  return data.coverUrl;
+}
+
+async function createTournament() {
+  const err = document.getElementById("t_err"); err.textContent = "";
+  const name = document.getElementById("t_name").value.trim();
+  const description = document.getElementById("t_desc")?.value.trim();
+  const prize = document.getElementById("t_prize")?.value.trim();
+  const mode = document.getElementById("t_mode").value;
+  const bo = Number(document.getElementById("t_bo").value);
+  const mapPool = document.getElementById("t_maps").value.split(",").map(x => x.trim()).filter(Boolean);
+
+  const res = await fetch("/api/tournaments", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ name, description, prize, mode, bo, mapPool })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  await refreshTournamentsAndTeams();
+}
+
+async function createTeam() {
+  const err = document.getElementById("team_err"); err.textContent = "";
+  const tournamentId = document.getElementById("team_tournament").value;
+  const name = document.getElementById("team_name").value.trim();
+  const res = await fetch("/api/teams", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ tournamentId, name })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  document.getElementById("team_name").value = "";
+  await refreshTournamentsAndTeams();
+}
+
+async function setCaptain() {
+  const err = document.getElementById("cap_err"); err.textContent = "";
+  const teamId = document.getElementById("captain_team").value;
+  const userId = document.getElementById("captain_user").value;
+  const res = await fetch(`/api/teams/${teamId}/set-captain`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ userId })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  await refreshTournamentsAndTeams();
+}
+
+async function createMatch() {
+  const err = document.getElementById("m_err"); err.textContent = "";
+  const tournamentId = document.getElementById("m_tournament").value;
+  const teamAId = document.getElementById("m_teamA").value;
+  const teamBId = document.getElementById("m_teamB").value;
+  const res = await fetch("/api/matches", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ tournamentId, teamAId, teamBId })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  const link = document.getElementById("m_link");
+  link.style.display = "block";
+  link.textContent = data.url;
+  document.getElementById("m_copy").style.display = "inline-flex";
+}
+
+function copyMatch() {
+  const t = document.getElementById("m_link").textContent;
+  navigator.clipboard.writeText(t);
+}
+
+refreshMe();
+refreshServers();
+refreshTournamentsAndTeams();
+refreshPlayersForCaptain();
+</script>
+</body>
+</html>
