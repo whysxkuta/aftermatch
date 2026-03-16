@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aftermatch.ru — Турнир</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div>
+      <div class="nav">
+        <a href="/login.html">Вход</a>
+        <a href="/register.html">Регистрация</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="hero" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="details" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="prizes" class="card" style="display:none;"></div>
+  </div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const id = q.get("id");
+function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function load() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}`, { credentials: "include" });
+  const t = await res.json().catch(()=>null);
+  if (!res.ok || !t) {
+    document.getElementById("hero").textContent = (t && t.error) ? t.error : "Ошибка";
+    document.getElementById("details").style.display = "none";
+    return;
+  }
+
+  document.title = `${t.name} — aftermatch.ru`;
+
+  document.getElementById("hero").innerHTML = `
+    <div class="tour-page-header" style="${t.page_cover_url ? `background-image:url(${t.page_cover_url});background-size:cover;background-position:center;` : ``}">
+      <div class="tour-page-overlay">
+        <div class="badge">${t.card_badge}</div>
+        <div style="height:12px"></div>
+        <div style="font-size:34px; font-weight:800; line-height:1.15;">${esc(t.name)}</div>
+        <div class="small" style="margin-top:10px; max-width:760px;">${esc(t.description || "")}</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("details").innerHTML = `
+    <h2>О турнире</h2>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <span class="badge accent">${esc(t.mode || "—")}</span>
+      <span class="badge">${esc(t.bracket_mode || "single_elim")}</span>
+      <span class="badge">${t.has_prizes ? "С призами" : "Без призовых"}</span>
+    </div>
+    <div style="height:12px"></div>
+    <div class="small">${esc(t.description || "Описание пока не заполнено.")}</div>
+  `;
+
+  if (Array.isArray(t.prizes) && t.prizes.length) {
+    const box = document.getElementById("prizes");
+    box.style.display = "block";
+    box.innerHTML = `
+      <h2>Призовые</h2>
+      ${t.prizes.map(p => `
+        <div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);">
+          <div><b>${p.place} место</b></div>
+          <div class="badge accent">${esc(p.value)}</div>
+        </div>
+      `).join("")}
+    `;
+  }
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aftermatch.ru - Главная</title>
+  <link rel="stylesheet" href="/style.css" />
+<script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+<div>
+          <div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div>
+</div>
+      </div>
+      <div class="nav">
+        
+        
+        
+        <a href="/login.html">Вход</a>
+        <a href="/register.html">Регистрация</a>
+        </div>
+    </div>
+  </div>
+
+    <div class="container">
+  <div class="home-hero">
+    <div class="hero-card">
+      <h1 class="hero-title center">aftermatch.ru</h1>
+      <div class="hero-sub center">Все для турниров у тебя под рукой✨</div>
+
+      <div class="hero-row center">
+        <div class="search">
+          <input id="q" placeholder="Поиск турнира..." />
+        </div>
+        <div class="hero-actions" id="heroAuth">
+          <a class="btn primary" href="/register.html">Регистрация</a>
+          <a class="btn" href="/login.html">Вход</a>
+        </div>
+      </div>
+      </div>
+  </div>
+
+  <div class="section-title">
+    <h2>Турниры</h2>
+    <div class="small" id="tCount"></div>
+  </div>
+
+  <div id="tours" class="tour-grid"></div>
+</div>
+
+<script>
+
+async function load() {
+  const el = document.getElementById("tours");
+  const res = await fetch("/api/tournaments", { credentials: "include" });
+  const rows = await res.json();
+  document.getElementById("tCount").textContent = Array.isArray(rows) ? `${rows.length}` : "";
+
+  if (!rows.length) {
+    el.innerHTML = "<div class='card'>Пока нет турниров.</div>";
+    return;
+  }
+
+  el.innerHTML = rows.map(t => `
+    <a class="card tour-card" href="/tournament.html?id=${encodeURIComponent(t.id)}" style="text-decoration:none; color:inherit;">
+      <div class="tour-thumb" style="${t.cover_url ? `background-image:url(${t.cover_url});background-size:cover;background-position:center;` : ``}"></div>
+      <div style="height:10px"></div>
+      <div style="font-size:18px;"><b>${t.name}</b></div>
+      <div class="small" style="margin-top:6px;">${t.description || ""}</div>
+      <div style="height:10px"></div>
+      ${t.has_prizes ? `<div class="badge accent">С призами</div>` : `<div class="badge">Без призовых</div>`}
+    </a>
+  `).join("");
+}
+load();
+</script>
+</body>
+</html>
