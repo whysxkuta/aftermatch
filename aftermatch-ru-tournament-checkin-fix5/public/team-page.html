@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aftermatch.ru — Команда</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div>
+      </div>
+      <div class="nav">
+        <a href="/">Главная</a>
+        <a href="/login.html">Вход</a>
+        <a href="/register.html">Регистрация</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="head" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="members" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="actions" class="card" style="display:none;"></div>
+    <div style="height:14px"></div>
+    <div id="invites" class="card" style="display:none;"></div>
+  </div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const teamId = q.get("id");
+
+function esc(s) {
+  return (s ?? "").toString().replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+async function load() {
+  try {
+    const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}`, { credentials: "include" });
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data) {
+      document.getElementById("head").textContent = (data && data.error) ? data.error : `Ошибка (${res.status})`;
+      document.getElementById("members").style.display = "none";
+      return;
+    }
+
+    const team = data.team;
+    const myRole = data.myRole || null;
+    const teamAvatarUrl = team.avatar_url ? `${team.avatar_url}${team.avatar_url.includes("?") ? "&" : "?"}t=${Date.now()}` : null;
+
+    document.getElementById("head").innerHTML = `
+      <div class="row" style="align-items:center; gap:18px;">
+        <div class="avatar-wrap">
+          <div class="team-avatar-lg ${teamAvatarUrl ? `` : `steam-default-avatar`}" style="${teamAvatarUrl ? `background-image:url(${teamAvatarUrl});background-size:cover;background-position:center;` : ``}"></div>
+          ${myRole === "captain" ? `<button class="avatar-edit-btn" id="editTeamAvatar" title="Обновить аватар">✎</button><input id="teamAvatarInput" type="file" accept=".png,.jpg,.jpeg,.webp" style="display:none" />` : ``}
+        </div>
+        <div style="flex:1;">
+          <div class="team-card-title">${esc(team.name)}</div>
+          <div class="team-card-tag">${team.tag ? `[${esc(team.tag)}]` : ""}</div>
+          <div class="small" style="margin-top:8px;">${esc(team.description || "")}</div>
+        </div>
+        <div>
+          ${myRole ? `<span class="badge ${myRole === "captain" ? "accent" : ""}">${myRole === "captain" ? "Капитан" : "Участник"}</span>` : ""}
+        </div>
+      </div>
+    `;
+
+    const editTeamAvatar = document.getElementById("editTeamAvatar");
+    const teamAvatarInput = document.getElementById("teamAvatarInput");
+    if (editTeamAvatar && teamAvatarInput) {
+      editTeamAvatar.addEventListener("click", () => teamAvatarInput.click());
+      teamAvatarInput.addEventListener("change", () => {
+        const f = teamAvatarInput.files && teamAvatarInput.files[0];
+        if (f) uploadTeamAvatar(f);
+      });
+    }
+
+    const members = data.members || [];
+    document.getElementById("members").innerHTML = `
+      <h2>Состав</h2>
+      ${members.length ? members.map(m => `
+        <div class="row" style="justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.06);">
+          <div class="row" style="align-items:center;gap:12px;">
+            <div class="search-avatar ${m.avatar_url ? `` : `steam-default-avatar`}" style="${m.avatar_url ? `background-image:url(${m.avatar_url});background-size:cover;background-position:center;` : ``}"></div>
+            <div>
+              <a href="/player.html?id=${encodeURIComponent(m.user_id)}" style="color:inherit;text-decoration:none;"><b>${esc(m.nickname)}</b></a>
+              <div class="small">${esc(m.last_name)} ${esc(m.first_name)}${m.middle_name ? " " + esc(m.middle_name) : ""} ${m.online ? "• online" : ""}</div>
+            </div>
+          </div>
+          <span class="badge ${m.role === "captain" ? "accent" : ""}">${m.role === "captain" ? "Капитан" : "Игрок"}</span>
+        </div>
+      `).join("") : "<div class='small'>Пока пусто.</div>"}
+    `;
+
+    const actions = document.getElementById("actions");
+    actions.style.display = "block";
+    actions.innerHTML = `
+      <h2>Действия</h2>
+      ${myRole === "captain" ? `
+        <div class="small">Пригласить игрока по нику</div>
+        <div class="row" style="gap:10px; align-items:flex-start;">
+          <div style="flex:1; position:relative;">
+            <input id="inv_nick" placeholder="Ник игрока" style="width:100%;" />
+            <div id="inviteSuggest" class="search-results" style="position:absolute;left:0;right:0;top:44px;background:#101827;border:1px solid rgba(255,255,255,.12);border-radius:14px;z-index:5;"></div>
+          </div>
+          <button class="btn primary" id="inv_btn">Пригласить</button>
+        </div>
+        <div id="inv_err" class="small" style="margin-top:10px;"></div>
+        <hr/>
+      ` : ""}
+      ${myRole ? `<button class="btn" id="leave_btn">Выйти из команды</button>` : `<div class="small">Ты не состоишь в этой команде.</div>`}
+    `;
+
+    const invInput = document.getElementById("inv_nick");
+    if (invInput) {
+      let timer = null;
+      invInput.addEventListener("input", (e) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => runInviteSuggest(e.target.value.trim()), 150);
+      });
+    }
+
+    document.getElementById("inv_btn")?.addEventListener("click", invite);
+    document.getElementById("leave_btn")?.addEventListener("click", leaveTeam);
+
+    const invBox = document.getElementById("invites");
+    if (myRole === "captain") {
+      invBox.style.display = "block";
+      const pending = (data.invites || []).filter(i => i.status === "pending");
+      invBox.innerHTML = `
+        <h2>Приглашения</h2>
+        ${pending.length ? pending.map(i => `
+          <div class="row" style="justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.06);">
+            <div>
+              <b>${esc(i.invitedNickname)}</b>
+              <div class="small">Пригласил: ${esc(i.invitedByNickname)}</div>
+            </div>
+            <div class="small">pending</div>
+          </div>
+        `).join("") : "<div class='small'>Нет активных приглашений.</div>"}
+      `;
+    }
+  } catch {
+    document.getElementById("head").textContent = "Ошибка загрузки";
+    document.getElementById("members").textContent = "Ошибка загрузки";
+  }
+}
+
+async function uploadTeamAvatar(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}/avatar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ dataUrl })
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return alert((data && data.error) ? data.error : `Ошибка (${res.status})`);
+  location.reload();
+}
+
+async function runInviteSuggest(q) {
+  const box = document.getElementById("inviteSuggest");
+  if (!box) return;
+  if (!q || q.length < 2) { box.innerHTML = ""; return; }
+
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) {
+    box.innerHTML = '<div class="small" style="padding:10px;">Ошибка поиска</div>';
+    return;
+  }
+
+  const players = data.players || [];
+  box.innerHTML = players.map(p => `
+    <button type="button" class="search-item" style="width:100%;border:none;background:transparent;text-align:left;" data-nick="${esc(p.nickname)}">
+      <div class="search-avatar ${p.avatar_url ? `` : `steam-default-avatar`}" style="${p.avatar_url ? `background-image:url(${p.avatar_url});background-size:cover;background-position:center;` : ``}"></div>
+      <div style="flex:1;">
+        <div><b>${esc(p.nickname)}</b> ${p.online ? '<span class="online-dot"></span><span class="small">online</span>' : ''}</div>
+        <div class="small">${esc(p.steam_profile_name || "")}</div>
+      </div>
+    </button>
+  `).join("") || '<div class="small" style="padding:10px;">Ничего не найдено</div>';
+
+  box.querySelectorAll("[data-nick]").forEach(btn => btn.addEventListener("click", () => {
+    document.getElementById("inv_nick").value = btn.dataset.nick;
+    box.innerHTML = "";
+  }));
+}
+
+async function invite() {
+  const err = document.getElementById("inv_err");
+  if (err) err.textContent = "";
+  const nickname = document.getElementById("inv_nick")?.value.trim() || "";
+  if (!nickname) {
+    if (err) err.textContent = "Укажи ник.";
+    return;
+  }
+
+  const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}/invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ nickname })
+  });
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : `Ошибка (${res.status})`;
+    if (err) err.textContent = msg;
+    alert(msg);
+    return;
+  }
+
+  if (err) err.textContent = "Приглашение отправлено ✅";
+  setTimeout(() => location.reload(), 500);
+}
+
+async function leaveTeam() {
+  if (!confirm("Выйти из команды?")) return;
+  const res = await fetch(`/api/teams/${encodeURIComponent(teamId)}/leave`, {
+    method: "POST",
+    credentials: "include"
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return alert((data && data.error) ? data.error : `Ошибка (${res.status})`);
+  location.href = "/";
+}
+
+load();
+</script>
+</body>
+</html>

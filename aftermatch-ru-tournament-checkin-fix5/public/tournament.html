@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aftermatch.ru — Турнир</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div>
+      <div class="nav">
+        <a href="/login.html">Вход</a>
+        <a href="/register.html">Регистрация</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="hero" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="details" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="prizes" class="card" style="display:none;"></div>
+    <div style="height:14px"></div>
+    <div id="teams" class="card">Загрузка...</div>
+  </div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const id = q.get("id");
+function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function load() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}`, { credentials: "include" });
+  const t = await res.json().catch(()=>null);
+  if (!res.ok || !t) {
+    document.getElementById("hero").textContent = (t && t.error) ? t.error : "Ошибка";
+    document.getElementById("details").style.display = "none";
+    return;
+  }
+
+  document.title = `${t.name} — aftermatch.ru`;
+
+  document.getElementById("hero").innerHTML = `
+    <div class="tour-page-header" style="${t.page_cover_url ? `background-image:url(${t.page_cover_url});background-size:cover;background-position:center;` : ``}">
+      <div class="tour-page-overlay">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div>
+            <div class="badge">${t.card_badge}</div>
+            <div style="height:12px"></div>
+            <div style="font-size:34px; font-weight:800; line-height:1.15;">${esc(t.name)}</div>
+            <div class="small" style="margin-top:10px; max-width:760px;">${esc(t.description || "")}</div>
+          </div>
+          <div id="joinBox"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const checkinText = t.checkin_until ? new Date(t.checkin_until).toLocaleString("ru-RU") : "—";
+  const startText = t.matches_start_at ? new Date(t.matches_start_at).toLocaleString("ru-RU") : "—";
+
+  document.getElementById("details").innerHTML = `
+    <h2>О турнире</h2>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <span class="badge accent">${esc(t.mode || "—")}</span>
+      <span class="badge">${esc(t.bracket_mode || "single_elim")}</span>
+      <span class="badge">${t.has_prizes ? "С призами" : "Без призовых"}</span>
+      <span class="badge">Команд: ${Number(t.teams_count || 0)}${Number(t.max_teams || 0) ? " / " + Number(t.max_teams) : ""}</span>
+    </div>
+    <div style="height:12px"></div>
+    <div class="small">${esc(t.description || "Описание пока не заполнено.")}</div>
+    <div style="height:12px"></div>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <div class="card" style="padding:12px; min-width:260px;">
+        <div class="small">Чеки-ин до</div>
+        <div><b>${esc(checkinText)}</b></div>
+      </div>
+      <div class="card" style="padding:12px; min-width:260px;">
+        <div class="small">Начало матчей</div>
+        <div><b>${esc(startText)}</b></div>
+      </div>
+    </div>
+  `;
+
+  if (Array.isArray(t.prizes) && t.prizes.length) {
+    const box = document.getElementById("prizes");
+    box.style.display = "block";
+    box.innerHTML = `
+      <h2>Призовые</h2>
+      ${t.prizes.map(p => `
+        <div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);">
+          <div><b>${p.place} место</b></div>
+          <div class="badge accent">${esc(p.value)}</div>
+        </div>
+      `).join("")}
+    `;
+  }
+
+  const joinBox = document.getElementById("joinBox");
+  if (t.i_am_captain && t.my_team && !t.my_team_registered) {
+    joinBox.innerHTML = `<button class="btn primary" onclick="registerTeam()">Принять участие</button>`;
+  } else if (t.i_am_captain && t.my_team_registered) {
+    joinBox.innerHTML = `<div class="badge accent">Команда уже участвует</div>`;
+  } else if (t.my_team && !t.i_am_captain) {
+    joinBox.innerHTML = `<div class="badge">Только капитан может зарегистрировать команду</div>`;
+  } else {
+    joinBox.innerHTML = ``;
+  }
+
+  const teams = Array.isArray(t.teams) ? t.teams : [];
+  document.getElementById("teams").innerHTML = `
+    <h2>Команды</h2>
+    ${teams.length ? teams.map(team => `
+      <div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:12px;">
+        <div class="row" style="align-items:center;gap:12px;">
+          <div class="team-avatar-sm ${team.avatar_url ? `` : `steam-default-avatar`}" style="${team.avatar_url ? `background-image:url(${team.avatar_url});background-size:cover;background-position:center;` : ``}"></div>
+          <div>
+            <div><b>${team.tag ? "[" + esc(team.tag) + "] " : ""}${esc(team.name)}</b></div>
+            <div class="small">${esc(team.description || "")}</div>
+            <div class="small">Игроков: ${Number(team.players_count || 0)}</div>
+          </div>
+        </div>
+        <div class="row" style="gap:8px;align-items:center;">
+          <div class="small">${new Date(team.registered_at).toLocaleString("ru-RU")}</div>
+          ${t.is_admin ? `<button class="btn" onclick="removeTeam('${team.id}')">Исключить</button>` : ``}
+        </div>
+      </div>
+    `).join("") : `<div class="small">Пока нет зарегистрированных команд.</div>`}
+  `;
+}
+
+async function registerTeam() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/register-team`, {
+    method: "POST",
+    credentials: "include"
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return alert((data && data.error) ? data.error : "Ошибка");
+  load();
+}
+
+async function removeTeam(teamId) {
+  if (!confirm("Исключить команду из турнира?")) return;
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/remove-team`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ teamId })
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return alert((data && data.error) ? data.error : "Ошибка");
+  load();
+}
+
+load();
+</script>
+</body>
+</html>
