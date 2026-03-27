@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Регистрация — LAN</title>
+  <link rel="stylesheet" href="/style.css" />
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+<div>
+        <div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div>
+</div>
+    </div>
+    <div class="nav">
+      <a href="/">Главная</a>
+        
+      
+      <a href="/login.html">Вход</a>
+      <a href="/register.html">Регистрация</a>
+      </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row" style="align-items:center; justify-content:space-between;">
+    <h1>Регистрация</h1>
+    </div>
+
+  <div id="msg" class="card small" style="text-align:center">—</div>
+
+  <div id="steamBlock" class="card" style="text-align:center;">
+    <h2>Подтверди Steam</h2>
+    <div class="small">Авторизуйся через Steam. Дальше будет стандартная регистрация :)</div>
+    <div style="height:10px"></div>
+    <a class="btn primary" href="/auth/steam">Войти через Steam</a>
+  </div>
+
+  <div id="formBlock" class="card" style="display:none; text-align:center;">
+  <h2>Расскажи немного о себе</h2>
+  <hr/>
+  <div class="small" style="margin-bottom:8px;">От 2 до 32 знаков, латиница, - и _</div>
+  <input id="nickname" placeholder="Ник (уникальный)" style="width:100%; max-width:520px;" />
+  <div id="nickHint" class="small" style="margin-top:6px;"></div>
+
+  <div style="height:10px"></div>
+  <div class="small" style="margin-bottom:6px;">SteamID</div>
+  <input id="steamId" readonly style="width:100%; max-width:520px; opacity:.85;" />
+
+  <div style="height:10px"></div>
+  <input id="password" type="password" placeholder="Пароль (8–32)" style="width:100%; max-width:520px;" />
+  <div style="height:10px"></div>
+  <input id="password2" type="password" placeholder="Повтор пароля" style="width:100%; max-width:520px;" />
+
+  <div style="height:14px"></div>
+  <input id="lastName" placeholder="Фамилия" style="width:100%; max-width:520px;" />
+  <div style="height:10px"></div>
+  <input id="firstName" placeholder="Имя" style="width:100%; max-width:520px;" />
+  <div style="height:10px"></div>
+  <input id="middleName" placeholder="Отчество" style="width:100%; max-width:520px;" />
+  <div class="small" style="margin-top:6px;">Только буквы (латиница/кириллица) и тире</div>
+
+  <div style="height:14px"></div>
+  <button class="btn primary" onclick="register()">Создать аккаунт</button>
+  <div id="err" class="small" style="margin-top:10px;"></div>
+</div>
+
+  <div class="card small">
+    Уже есть аккаунт? <a href="/login.html">Войти</a>
+  </div>
+</div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const msg = document.getElementById("msg");
+
+function showError(code) {
+  if (!code) return;
+  const map = {
+    steam_taken: "Этот Steam-аккаунт уже привязан к другому игроку.",
+    steam_failed: "Не удалось пройти Steam авторизацию. Попробуй ещё раз."
+  };
+  msg.textContent = map[code] || code;
+}
+
+async function load() {
+  showError(q.get("err"));
+  if (q.get("steam")) {
+    msg.innerHTML = "&nbsp;";
+  }
+  showError(q.get("err"));
+  const res = await fetch("/api/auth/me", { credentials: "include" });
+  const data = await res.json();
+
+  if (data.user) {
+    msg.innerHTML = `Ты уже вошёл как <b>${data.user.nickname}</b>. `;
+    document.getElementById("steamBlock").style.display = "none";
+    document.getElementById("formBlock").style.display = "none";
+    return;
+  }
+
+  if (data.pendingSteamId64) {
+    msg.innerHTML = "&nbsp;";
+    document.getElementById("formBlock").style.display = "block";
+    document.getElementById("steamId").value = data.pendingSteamId64;
+    if (data.pendingSteamProfileName) {
+      document.getElementById("nickname").value = data.pendingSteamProfileName;
+      if (!validateNick(data.pendingSteamProfileName)) {
+        document.getElementById("nickname").style.borderColor = "rgba(255,0,0,.7)";
+        document.getElementById("nickHint").textContent = "Невалидный никнейм";
+      }
+    }
+    document.getElementById("steamBlock").style.display = "none";
+  } else {
+    msg.innerHTML = "&nbsp;";
+    document.getElementById("formBlock").style.display = "none";
+    document.getElementById("steamBlock").style.display = "block";
+  }
+}
+
+
+function validateNick(nick) {
+  return /^[A-Za-z0-9_-]{2,32}$/.test(nick);
+}
+function validateName(s) {
+  return /^[A-Za-zА-Яа-яЁё-]+$/.test(s);
+}
+
+async function register() {
+  const nickname = document.getElementById("nickname").value.trim();
+  const password2 = document.getElementById("password2").value;
+
+  const password = document.getElementById("password").value.trim();
+  const firstName = document.getElementById("firstName").value.trim();
+  const lastName = document.getElementById("lastName").value.trim();
+  const middleName = document.getElementById("middleName").value.trim();
+  const err = document.getElementById("err");
+  err.textContent = "";
+
+const nickHint = document.getElementById("nickHint");
+nickHint.textContent = "";
+document.getElementById("nickname").style.borderColor = "";
+
+if (password.length < 8 || password.length > 32) {
+  err.textContent = "Пароль должен быть 8–32 символа.";
+  return;
+}
+if (password !== password2) {
+  err.textContent = "Пароли не совпадают.";
+  return;
+}
+if (!validateNick(nickname)) {
+  document.getElementById("nickname").style.borderColor = "rgba(255,0,0,.7)";
+  nickHint.textContent = "Невалидный никнейм";
+  err.textContent = "Исправь никнейм по требованиям.";
+  return;
+}
+
+if (!validateName(firstName) || !validateName(lastName) || (middleName && !validateName(middleName))) {
+  err.textContent = "Имя/Фамилия/Отчество: только буквы и тире.";
+  return;
+}
+
+  const res = await fetch("/api/auth/register", { credentials: "include",
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ nickname, password, firstName, lastName, middleName })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || "Ошибка"; return; }
+  location.href = `/player.html?id=${data.user.id}`;
+}
+
+load();
+// sometimes steam persona arrives a bit later; retry once
+setTimeout(load, 900);
+
+</script>
+</body>
+</html>

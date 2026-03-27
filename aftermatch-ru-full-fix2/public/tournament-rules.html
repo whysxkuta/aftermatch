@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Правила турнира — aftermatch.ru</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner"><div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div><div class="nav"></div></div></div>
+<div class="container">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;">
+      <h1 id="title" style="margin:0;">Правила турнира</h1>
+      <a class="nav-btn-link" id="backLink" href="#">Назад</a>
+    </div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="card"><div id="rulesBox" class="rules-box">Загрузка...</div></div>
+</div>
+<script>
+const id = new URLSearchParams(location.search).get("id");
+document.getElementById("backLink").href = `/tournament.html?id=${encodeURIComponent(id)}`;
+function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function load() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/rules`, { credentials:"include" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data) {
+    document.getElementById("rulesBox").textContent = (data && data.error) ? data.error : "Ошибка";
+    return;
+  }
+  document.getElementById("title").textContent = `Правила • ${data.name}`;
+  document.getElementById("rulesBox").innerHTML = data.rules_text ? esc(data.rules_text).replace(/\n/g,"<br/>") : "Правила пока не заполнены.";
+}
+load();
+</script>
+</body></html>
