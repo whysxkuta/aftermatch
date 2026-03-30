@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Вход — aftermatch.ru</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div>
+    <div class="nav">
+      <a href="/login.html">Вход</a>
+      <a href="/register.html">Регистрация</a>
+    </div>
+  </div>
+</div>
+
+<div id="pageWrap">
+  <div class="container">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <h1>Вход</h1>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="col"><input id="nickname" placeholder="Ник" /></div>
+        <div class="col"><input id="password" type="password" placeholder="Пароль" /></div>
+      </div>
+      <div style="height:10px"></div>
+      <button class="btn primary" onclick="login()">Войти</button>
+      <div id="err" class="small" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card small">
+      Нет аккаунта? <a href="/register.html">Регистрация</a>
+    </div>
+  </div>
+</div>
+
+<div id="banOverlay" class="ban-overlay" style="display:none;">
+  <div class="ban-modal">
+    <div class="ban-lock">🔒</div>
+    <div class="ban-title">Ваш аккаунт заблокирован</div>
+    <div class="small" style="text-align:center;">Причина:</div>
+    <div id="banReason" class="ban-reason">—</div>
+    <div id="banUntil" class="ban-until">—</div>
+  </div>
+</div>
+
+<script>
+function showBanModal(message) {
+  const reasonMatch = message.match(/•\s*(.*)$/);
+  const untilMatch = message.match(/до\s+([^•]+)/);
+  document.getElementById("banReason").textContent = reasonMatch ? reasonMatch[1].trim() : "Без причины";
+  document.getElementById("banUntil").textContent = `Дата разблокировки: ${untilMatch ? untilMatch[1].trim() : "не указана"}`;
+  document.getElementById("pageWrap").classList.add("blurred-page");
+  document.getElementById("banOverlay").style.display = "flex";
+}
+
+async function login() {
+  const nickname = document.getElementById("nickname").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const err = document.getElementById("err");
+  err.textContent = "";
+
+  const res = await fetch("/api/auth/login", { credentials: "include",
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ nickname, password })
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : "Ошибка";
+    if (msg.includes("Аккаунт заблокирован")) {
+      showBanModal(msg);
+      return;
+    }
+    err.textContent = msg;
+    return;
+  }
+  location.href = `/player.html?id=${data.user.id}`;
+}
+</script>
+</body>
+</html>
