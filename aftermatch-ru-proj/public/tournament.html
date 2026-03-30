@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>aftermatch.ru — Турнир</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div>
+      <div class="nav"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="hero" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div class="card tournament-hub-nav" id="hubNav">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="details" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="teams" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div id="roomMatches" class="card" style="display:none;"></div>
+  </div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const id = q.get("id");
+function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(v){
+  if(!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return esc(v);
+  return d.toLocaleString("ru-RU", {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function toast(msg, type="error"){ if(window.showToast) showToast(msg, type); else alert(msg); }
+
+const MAP_NAMES = { de_mirage:"Mirage", de_inferno:"Inferno", de_nuke:"Nuke", de_ancient:"Ancient", de_anubis:"Anubis", de_vertigo:"Vertigo", de_dust2:"Dust II", de_train:"Train", de_overpass:"Overpass" };
+function mapLabel(v){ return MAP_NAMES[v] || (v||"").replace(/^de_/,'').replace(/_/g,' ').replace(/\b\w/g,s=>s.toUpperCase()); }
+
+async function registerTeam() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/register-team`, {
+    method: "POST",
+    credentials: "include"
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return toast((data && data.error) ? data.error : "Ошибка");
+  toast("Команда зарегистрирована ✅", "success");
+  load();
+}
+
+async function confirmCheckin() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/checkin`, { method:"POST", credentials:"include" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return toast((data && data.error) ? data.error : "Ошибка");
+  toast("Участие подтверждено ✅", "success");
+  load();
+}
+
+async function removeTeam(teamId) {
+  if (!confirm("Исключить команду из турнира?")) return;
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/remove-team`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ teamId })
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return toast((data && data.error) ? data.error : "Ошибка");
+  toast("Команда исключена ✅", "success");
+  load();
+}
+
+async function load() {
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}`, { credentials: "include" });
+  const t = await res.json().catch(()=>null);
+  if (!res.ok || !t) {
+    document.getElementById("hero").textContent = (t && t.error) ? t.error : "Ошибка";
+    document.getElementById("hubNav").style.display = "none";
+    document.getElementById("details").style.display = "none";
+    document.getElementById("teams").style.display = "none";
+    return;
+  }
+
+  document.title = `${t.name} — aftermatch.ru`;
+
+  let joinHtml = "";
+  if (t.my_team_disqualified) {
+    joinHtml = `<div class="badge">Команда дисквалифицирована</div>`;
+  } else if (t.i_am_captain && t.my_team && !t.my_team_registered && !t.registration_is_closed) {
+    joinHtml = `<button class="btn primary" onclick="registerTeam()">Принять участие</button>`;
+  } else if (t.i_am_captain && t.my_team_registered && !t.checkin_confirmed && t.checkin_is_open && !t.checkin_is_closed) {
+    joinHtml = `<button class="btn primary" onclick="confirmCheckin()">Подтвердить участие</button>`;
+  } else if (t.i_am_captain && t.my_team_registered && t.checkin_confirmed) {
+    joinHtml = `<div class="badge accent">Участие подтверждено</div>`;
+  } else if (t.i_am_captain && t.my_team_registered) {
+    joinHtml = `<div class="badge accent">Команда уже участвует</div>`;
+  } else if (t.my_team && !t.i_am_captain) {
+    joinHtml = `<div class="badge">Только капитан может действовать от имени команды</div>`;
+  } else if (t.registration_is_closed) {
+    joinHtml = `<div class="badge">Регистрация закрыта</div>`;
+  }
+
+  document.getElementById("hero").innerHTML = `
+    <div class="tour-page-header" style="${t.page_cover_url ? `background-image:url(${t.page_cover_url});background-size:cover;background-position:center;` : ``}">
+      <div class="tour-page-overlay">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;">
+          <div>
+            <div class="badge">${t.card_badge}</div>
+            <div style="height:14px"></div>
+            <div style="font-size:34px; font-weight:800; line-height:1.15;">${esc(t.name)}</div>
+            <div class="small" style="margin-top:10px; max-width:760px;">${esc(t.description || "")}</div>
+          </div>
+          <div>${joinHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("hubNav").innerHTML = `
+    <div class="tournament-hub-buttons">
+      <a class="nav-btn-link tournament-hub-btn" href="/tournament-bracket.html?id=${encodeURIComponent(id)}">Сетка</a>
+      <a class="nav-btn-link tournament-hub-btn" href="/tournament-rules.html?id=${encodeURIComponent(id)}">Правила</a>
+      ${t.is_admin ? `<a class="nav-btn-link tournament-hub-btn tournament-settings-btn" href="/tournament-settings.html?id=${encodeURIComponent(id)}"><img src="/src/Settings.ico" alt="" class="settings-icon" /></a>` : ``}
+    </div>
+  `;
+
+  document.getElementById("details").innerHTML = `
+    <h2>О турнире</h2>
+    <div class="small">${esc(t.description || "Описание пока не заполнено.")}</div>
+    <div style="height:12px"></div>
+    <div class="small"><b>Формат:</b> ${esc(t.mode || "—")}</div>
+    <div class="small"><b>Сетка:</b> ${esc(t.bracket_mode || "single_elim")}</div>
+    <div class="small"><b>Карты:</b><br/>${(t.map_pool || []).length ? (t.map_pool || []).map(m => `&nbsp;&nbsp;&nbsp;&nbsp;${esc(mapLabel(m))}`).join("<br/>") : "—"}</div>
+    <div style="height:12px"></div>
+    <div class="tournament-meta-grid">
+      <div class="card tournament-meta-card">
+        <div class="small">Команд</div>
+        <div><b>${Number(t.teams_count || 0)}${Number(t.max_teams || 0) ? " / " + Number(t.max_teams) : ""}</b></div>
+      </div>
+      <div class="card tournament-meta-card">
+        <div class="small">Чек-ин ОТ</div>
+        <div><b>${fmt(t.checkin_from)}</b></div>
+      </div>
+      <div class="card tournament-meta-card">
+        <div class="small">Чек-ин ДО</div>
+        <div><b>${fmt(t.checkin_until)}</b></div>
+      </div>
+      <div class="card tournament-meta-card">
+        <div class="small">Регистрация ДО</div>
+        <div><b>${fmt(t.registration_until)}</b></div>
+      </div>
+      <div class="card tournament-meta-card">
+        <div class="small">Начало матчей</div>
+        <div><b>${fmt(t.matches_start_at)}</b></div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      ${t.registration_is_closed ? `<span class="badge">Регистрация закрыта</span>` : `<span class="badge accent">Регистрация открыта</span>`}
+      ${Number(t.early_checkin_open || 0) ? `<span class="badge accent">Ранний чек-ин открыт</span>` : ``}
+      ${t.checkin_is_open && !t.checkin_is_closed ? `<span class="badge accent">Чек-ин открыт</span>` : ``}
+      ${t.checkin_is_closed ? `<span class="badge">Чек-ин закрыт</span>` : ``}
+    </div>
+  `;
+
+  const teams = Array.isArray(t.teams) ? t.teams : [];
+  document.getElementById("teams").innerHTML = `
+    <h2>Команды</h2>
+    ${teams.length ? teams.map(team => `
+      <div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:12px;">
+        <div class="row" style="align-items:center;gap:12px;">
+          <div class="team-avatar-sm ${team.avatar_url ? `` : `steam-default-avatar`}" style="${team.avatar_url ? `background-image:url(${team.avatar_url});background-size:cover;background-position:center;` : ``}"></div>
+          <div>
+            <div><b>${team.tag ? "[" + esc(team.tag) + "] " : ""}${esc(team.name)}</b></div>
+            <div class="small">${esc(team.description || "")}</div>
+            <div class="small">Игроков: ${Number(team.players_count || 0)}</div>
+            ${team.disqualified_at ? `<div class="small" style="color:#ff7f7f;">Дисквалификация: ${esc(team.disqualification_reason || "Чек-ин не подтверждён")}</div>` : team.confirmed_at ? `<div class="small" style="color:#7dffa5;">Чек-ин подтверждён</div>` : ``}
+          </div>
+        </div>
+        <div class="row" style="gap:8px;align-items:center;">
+          <div class="small">${fmt(team.registered_at)}</div>
+          ${t.is_admin ? `<button class="btn" onclick="removeTeam('${team.id}')">Исключить</button>` : ``}
+        </div>
+      </div>
+    `).join("") : `<div class="small">Пока нет зарегистрированных команд.</div>`}
+  `;
+
+  if (Array.isArray(t.room_matches) && t.room_matches.length) {
+    const roomBox = document.getElementById("roomMatches");
+    roomBox.style.display = "block";
+    roomBox.innerHTML = `
+      <h2>Комнаты матчей</h2>
+      ${t.room_matches.map(m => `
+        <div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:12px;">
+          <div>
+            <div><b>${m.teamA?.name || "TBD"} vs ${m.teamB?.name || "TBD"}</b></div>
+            <div class="small">Раунд ${m.round} • ${fmt(m.scheduledAt)}</div>
+          </div>
+          <a class="btn primary" href="/match-room.html?id=${encodeURIComponent(m.matchId)}">Комната матча</a>
+        </div>
+      `).join("")}
+    `;
+  } else {
+    document.getElementById("roomMatches").style.display = "none";
+  }
+}
+load();
+</script>
+</body>
+</html>
