@@ -1,0 +1,78 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Профиль — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body><div class="shell-page profile-page"><section id="profileHero" class="glass-panel profile-hero-card"><div class="profile-overlay"></div><div class="panel-body profile-hero-layout"></div></section><div class="grid one" style="margin-top:18px"><section class="glass-panel"><div class="panel-body stack"><div class="friend-head"><div><div class="kicker">social</div><h2>Друзья</h2></div><button id="openFriendSearch" class="friend-add-btn" title="Добавить в друзья">+</button></div><div id="friendSearchBox" class="friend-search-box"><div class="stack"><input id="friendSearchInput" placeholder="Найти пользователя по нику" /><div id="friendSearchResults"></div></div></div><div id="friendsWrap" class="list"></div></div></section></div></div><script>
+const id=new URLSearchParams(location.search).get('id');
+let meId=null, isMine=false, friendsData={friends:[],requests:[]}, playerData=null;
+const steamIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 8.66 5H19.5a4 4 0 1 1-1.2 2.86L13.9 12a3.5 3.5 0 1 1-1.62 1.85l4.52-2.6a4 4 0 1 1 .89 1.5l-4.22 2.42A3.5 3.5 0 1 1 10 11.06L6.95 9.8A2.75 2.75 0 1 0 8 15.14l3.33 1.38A10 10 0 0 0 12 2Z"/></svg>`;
+function esc(v=''){ return String(v).replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s])); }
+function pencilButton(cls, title){ return `<button class="edit-pencil ${cls}" title="${title}"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"></path><path d="M13 7l4 4"></path></svg></button>`; }
+function isFriend(userId){ return (friendsData.friends||[]).some(x => x.friend?.id === userId); }
+async function compressImage(file, mode='avatar'){
+  const url = URL.createObjectURL(file); const img = await new Promise((res,rej)=>{const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url;});
+  const cfg = mode==='banner' ? {w:1600,h:420,q:.84} : {w:512,h:512,q:.88};
+  const c=document.createElement('canvas'); c.width=cfg.w; c.height=cfg.h; const ctx=c.getContext('2d');
+  const srcRatio=img.width/img.height, dstRatio=cfg.w/cfg.h; let sx=0, sy=0, sw=img.width, sh=img.height;
+  if(srcRatio>dstRatio){ sw = img.height*dstRatio; sx=(img.width-sw)/2; } else { sh = img.width/dstRatio; sy=(img.height-sh)/2; }
+  ctx.drawImage(img,sx,sy,sw,sh,0,0,cfg.w,cfg.h); URL.revokeObjectURL(url); return c.toDataURL('image/webp', cfg.q);
+}
+async function uploadImage(endpoint, file, mode){
+  const dataUrl = await compressImage(file, mode);
+  const r = await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl})});
+  const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Ошибка загрузки'); return d;
+}
+async function pickAndUpload(endpoint, mode){
+  const input=document.createElement('input'); input.type='file'; input.accept='image/png,image/jpeg,image/webp';
+  input.onchange=async()=>{ const f=input.files?.[0]; if(!f) return; try{ await uploadImage(endpoint,f,mode); showToast('Сохранено','success'); location.reload(); }catch(e){ showToast(e.message||'Ошибка'); } };
+  input.click();
+}
+function renderFriends(){
+  const requests = friendsData.requests || []; const friends = friendsData.friends || [];
+  const requestsHtml = requests.length ? `<div class="kicker" style="margin-top:14px">входящие заявки</div>${requests.map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.avatar_url||''}')"></div><div>${esc(x.nickname)}</div></div><div class="list-item-actions"><button class="btn" onclick="respondReq('${x.id}','accept')">Принять</button><button class="btn" onclick="respondReq('${x.id}','decline')">Отклонить</button></div></div>`).join('')}` : '';
+  const friendsHtml = friends.length ? friends.map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.friend?.avatar_url||''}')"></div><div>${esc(x.friend?.nickname||'—')}</div></div><div class="list-item-actions"><a class="btn" href="/player.html?id=${encodeURIComponent(x.friend?.id||'')}">Профиль</a><button class="btn" onclick="openChatWith('${x.friend?.id||''}')">Чат</button></div></div>`).join('') : '<div class="muted">Пока пусто</div>';
+  friendsWrap.innerHTML = friendsHtml + requestsHtml;
+  const addBtn=document.getElementById('openFriendSearch');
+  if(addBtn) addBtn.style.display = isMine ? 'inline-flex' : 'none';
+}
+function renderHero(p){
+  const banner = p.profile_banner_url || p.avatar_url || '';
+  profileHero.style.backgroundImage = banner ? `url('${banner}')` : 'none';
+  const steamUrl = p.steam_id64 ? `https://steamcommunity.com/profiles/${p.steam_id64}` : '#';
+  const friend = isFriend(p.id);
+  const actionBtn = !isMine ? (friend ? `<button class="btn" id="chatFriendBtn">Открыть чат</button>` : `<button class="btn" id="addFriendBtn">Добавить в друзья</button>`) : '';
+  profileHero.querySelector('.panel-body').innerHTML = `
+    <div class="avatar-wrap">
+      <div class="avatar lg profile-avatar" style="background-image:url('${p.avatar_url||''}')"></div>
+      ${isMine ? pencilButton('avatar-pencil','Изменить аватар') : ''}
+    </div>
+    <div class="profile-main-copy">
+      <div class="kicker">игрок</div>
+      <div class="profile-title-row"><h1>${esc(p.nickname||'Игрок')}</h1>${isMine ? `<button id="changeNickBtn" class="edit-pencil inline visible" title="Изменить ник"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"></path><path d="M13 7l4 4"></path></svg></button>` : ''}</div>
+      <div class="muted">${esc([p.first_name,p.last_name].filter(Boolean).join(' ')||'')}</div>
+      ${p.steam_id64 ? `<a class="steam-chip" href="${steamUrl}" target="_blank" rel="noreferrer">${steamIcon}<span>${esc(p.steam_profile_name||'Steam')}</span></a>` : ''}
+      <div class="hero-actions" style="margin-top:14px">${actionBtn}</div>
+    </div>
+    <div class="profile-hero-actions">${isMine ? pencilButton('banner-pencil visible','Изменить шапку') : ''}</div>`;
+  document.querySelector('.avatar-pencil')?.addEventListener('click',()=>pickAndUpload('/api/me/avatar','avatar'));
+  document.querySelector('.banner-pencil')?.addEventListener('click',()=>pickAndUpload('/api/me/banner','banner'));
+  document.getElementById('changeNickBtn')?.addEventListener('click', async()=>{ const nickname=prompt('Новый ник'); if(!nickname) return; const r=await fetch('/api/auth/nickname',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); showToast('Ник обновлён','success'); location.reload(); });
+  document.getElementById('addFriendBtn')?.addEventListener('click',()=>sendFriendRequest(p.id));
+  document.getElementById('chatFriendBtn')?.addEventListener('click',()=>openChatWith(p.id));
+}
+async function sendFriendRequest(toUserId){ const r=await fetch('/api/friends/request',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({toUserId})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); showToast('Запрос отправлен','success'); }
+async function respondReq(requestId,action){ const r=await fetch('/api/friends/respond',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,action})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); location.reload(); }
+async function openChatWith(userId){ const r=await fetch(`/api/chats/direct/${encodeURIComponent(userId)}`,{method:'POST',credentials:'include'}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); location.href = `/chats.html?chat=${encodeURIComponent(d.chatId)}`; }
+async function searchUsers(){
+  const q = friendSearchInput.value.trim(); if(!q) { friendSearchResults.innerHTML=''; return; }
+  const r=await fetch(`/api/players/search?q=${encodeURIComponent(q)}`,{credentials:'include'}); const d=await r.json().catch(()=>({players:[]}));
+  friendSearchResults.innerHTML = (d.players||[]).filter(x=>x.id!==meId).map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.avatar_url||''}')"></div><div>${esc(x.nickname)}</div></div><div class="list-item-actions"><button class="btn" onclick="sendFriendRequest('${x.id}')">Добавить</button></div></div>`).join('') || '<div class="muted">Ничего не найдено</div>';
+}
+Promise.all([
+  fetch(`/api/players/${id}`).then(r=>r.json()),
+  fetch('/api/friends',{credentials:'include'}).then(r=>r.ok?r.json():{friends:[],requests:[]}),
+  fetch('/api/auth/me',{credentials:'include'}).then(r=>r.ok?r.json():{user:null})
+]).then(async ([p,friends,auth])=>{
+  playerData = p; friendsData = friends||{friends:[],requests:[]}; meId = auth?.user?.id || null; isMine = !!meId && meId===id;
+  if(isMine && p.steam_id64 && !p.avatar_url){ try{ await fetch('/api/me/steam-avatar/refresh',{method:'POST',credentials:'include'}); playerData = await fetch(`/api/players/${id}`).then(r=>r.json()); }catch{} }
+  renderHero(playerData); renderFriends();
+  openFriendSearch?.addEventListener('click',()=>friendSearchBox.classList.toggle('open'));
+  friendSearchInput?.addEventListener('input', searchUsers);
+});
+</script><script src="/app.js"></script></body></html>
