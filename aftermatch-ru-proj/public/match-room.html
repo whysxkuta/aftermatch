@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Комната матча — aftermatch.ru</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+  <style>
+    .mr-grid{display:grid;grid-template-columns:320px minmax(380px,1fr) 320px;gap:16px;align-items:start}.mr-col{min-height:520px}.mr-head{display:grid;grid-template-columns:1fr minmax(280px,420px) 1fr;gap:16px;align-items:center}.mr-team-head{display:flex;align-items:center;gap:16px}.mr-logo{width:72px;height:72px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800}.mr-center{text-align:center}.mr-title{font-size:28px;font-weight:800}.mr-sub{font-size:13px;color:#b7c0da}.ready-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.ready-btn{border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:12px 14px;font-weight:800;cursor:pointer;background:rgba(22,22,30,.92);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03), inset 0 0 22px rgba(190,44,58,.22)}.ready-btn.ready{box-shadow:inset 0 0 0 1px rgba(255,255,255,.03), inset 0 0 22px rgba(42,173,92,.24)}.ready-btn:disabled{opacity:.55;cursor:not-allowed}.ready-icon{display:inline-flex;width:18px;height:18px;border-radius:999px;align-items:center;justify-content:center;background:rgba(255,255,255,.10)}.map-hero{position:relative;overflow:hidden;min-height:132px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:#141824 center/cover no-repeat;display:flex;align-items:center;justify-content:center;text-align:center}.map-hero-title{font-size:18px;font-weight:900}.map-series{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.info-line{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);margin-top:10px}.veto-list{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}.veto-item{position:relative;overflow:hidden;min-height:58px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:#121826 center/cover no-repeat;padding:10px 14px;text-align:left;color:#fff}.veto-item.used{opacity:.45}.veto-item.active{outline:1px solid rgba(255,136,0,.45)}.veto-item:not(:disabled){cursor:pointer}.player-card{display:flex;align-items:center;gap:12px;border:1px solid rgba(255,145,0,.45);border-radius:18px;padding:12px;margin-top:12px}.player-avatar{width:52px;height:52px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04) center/cover no-repeat}.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:800;background:rgba(255,145,0,.16);border:1px solid rgba(255,145,0,.45);color:#ffb257}.hist-item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)} @media (max-width:1100px){.mr-grid,.mr-head,.map-series{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="topbar-inner"><div class="brand"><div><div class="brand-title"><a href="/" style="color:inherit;text-decoration:none;">aftermatch.ru</a></div></div></div><div class="nav"></div></div></div>
+  <div class="container">
+    <div id="roomHead" class="card">Загрузка...</div>
+    <div style="height:14px"></div>
+    <div class="mr-grid">
+      <div id="leftCol" class="card mr-col">Загрузка...</div>
+      <div class="card mr-col">
+        <div id="topReady"></div>
+        <div id="mapBox" style="margin-top:12px">Загрузка...</div>
+        <div id="vetoBox" style="margin-top:12px"></div>
+        <div id="joinBox" style="margin-top:12px"></div>
+      </div>
+      <div id="rightCol" class="card mr-col">Загрузка...</div>
+    </div>
+  </div>
+<script>
+const params = new URLSearchParams(location.search);
+const id = params.get("id");
+function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(v){ if(!v) return "—"; const d=new Date(v); if(Number.isNaN(d.getTime())) return esc(v); return d.toLocaleString("ru-RU",{ timeZone:"Europe/Moscow", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }); }
+const MAP_NAMES = { de_mirage:"Mirage", de_inferno:"Inferno", de_nuke:"Nuke", de_ancient:"Ancient", de_anubis:"Anubis", de_vertigo:"Vertigo", de_dust2:"Dust II", de_train:"Train", de_overpass:"Overpass" };
+function mapLabel(v){ return MAP_NAMES[v] || (v||"").replace(/^de_/,"").replace(/_/g," ").replace(/\b\w/g,s=>s.toUpperCase()); }
+function mapBg(v){ return `background-image:linear-gradient(180deg,rgba(4,7,18,.34),rgba(4,7,18,.88)),url('/mappics/${encodeURIComponent(v)}.png');background-size:cover;background-position:center;background-repeat:no-repeat`; }
+let timer = null;
+async function markReady(){
+  const res = await fetch(`/api/matches/${encodeURIComponent(id)}/ready`, { method:'POST', credentials:'include' });
+  const data = await res.json().catch(()=>null);
+  if(!res.ok){ if(window.showToast) showToast(data?.error || 'Ошибка'); else alert(data?.error || 'Ошибка'); return; }
+  loadRoom();
+}
+async function doVeto(map){
+  const res = await fetch(`/api/matches/${encodeURIComponent(id)}/veto-action`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({ map }) });
+  const data = await res.json().catch(()=>null);
+  if(!res.ok){ if(window.showToast) showToast(data?.error || 'Ошибка'); else alert(data?.error || 'Ошибка'); return; }
+  loadRoom();
+}
+function copyConnect(text){ navigator.clipboard.writeText(text || ''); if(window.showToast) showToast('Connect скопирован', 'success'); }
+function sideLabel(side, data){ return side === 'A' ? data.teamA.name : data.teamB.name; }
+function renderPlayer(col, team, captainName, isReady){
+  col.innerHTML = `<div class="small" style="margin-bottom:10px;">${esc(team.name)}</div>
+    <div class="player-card">
+      <div class="player-avatar" style="${team.avatar_url ? `background-image:url(${team.avatar_url})` : ''}"></div>
+      <div>
+        <div style="font-weight:800">${esc(captainName || '—')} <span class="pill">CAP</span></div>
+        <div class="small">${isReady ? 'Готов к veto' : 'Ожидаем подтверждение'}</div>
+      </div>
+    </div>`;
+}
+async function loadRoom(){
+  const res = await fetch(`/api/matches/${encodeURIComponent(id)}/room`, { credentials:'include' });
+  const data = await res.json().catch(()=>null);
+  if(!res.ok || !data){ document.getElementById('roomHead').textContent = data?.error || 'Ошибка'; return; }
+  const veto = data.veto || {};
+  const bothReady = !!veto.ready?.A && !!veto.ready?.B;
+  const currentStep = veto.steps && veto.steps[veto.stepIndex] ? veto.steps[veto.stepIndex] : null;
+  const readyDeadline = veto.ready_deadline_at ? new Date(veto.ready_deadline_at).getTime() : null;
+  const turnDeadline = veto.turn_deadline_at ? new Date(veto.turn_deadline_at).getTime() : null;
+  const scoreA = Number(data.result?.scoreA ?? data.result?.score_a ?? 0);
+  const scoreB = Number(data.result?.scoreB ?? data.result?.score_b ?? 0);
+  document.title = `${data.teamA.name} vs ${data.teamB.name} — Комната матча`;
+
+  function timeLeft(ms){ if(!ms) return '—'; const left=Math.max(0, Math.floor((ms - Date.now())/1000)); return `0:${String(left).padStart(2,'0')}`; }
+  clearInterval(timer);
+  timer=setInterval(()=>{ const el=document.getElementById('topTimer'); if(el) el.textContent = bothReady ? timeLeft(turnDeadline) : timeLeft(readyDeadline); }, 1000);
+
+  document.getElementById('roomHead').innerHTML = `<div class="mr-head">
+    <div class="mr-team-head">
+      <div><div class="mr-title">${esc(data.teamA.tag || data.teamA.name.slice(0,3).toUpperCase())}</div><div class="mr-sub">${esc(data.teamA.name)}</div></div>
+      <div class="mr-logo" style="${data.teamA.avatar_url ? `background-image:url(${data.teamA.avatar_url})` : ''}">${!data.teamA.avatar_url ? esc((data.teamA.tag || data.teamA.name[0] || 'A').slice(0,2).toUpperCase()) : ''}</div>
+    </div>
+    <div class="mr-center">
+      <div style="font-weight:800;font-size:22px;">${esc(data.tournament.mode || '5v5')} • BO${Number(data.tournament.bo || 1)}</div>
+      <div style="font-weight:900;font-size:26px;margin-top:6px;">${bothReady ? (data.status === 'finished' ? `${scoreA} — ${scoreB}` : '<span id="topTimer">'+timeLeft(turnDeadline)+'</span>') : '<span id="topTimer">'+timeLeft(readyDeadline)+'</span>'}</div>
+      <div class="mr-sub" style="margin-top:8px;">${esc(data.tournament.name)} • ${fmt(data.scheduledAt)}</div>
+    </div>
+    <div class="mr-team-head" style="justify-content:flex-end;">
+      <div class="mr-logo" style="${data.teamB.avatar_url ? `background-image:url(${data.teamB.avatar_url})` : ''}">${!data.teamB.avatar_url ? esc((data.teamB.tag || data.teamB.name[0] || 'B').slice(0,2).toUpperCase()) : ''}</div>
+      <div style="text-align:right"><div class="mr-title">${esc(data.teamB.tag || data.teamB.name.slice(0,3).toUpperCase())}</div><div class="mr-sub">${esc(data.teamB.name)}</div></div>
+    </div>
+  </div>`;
+
+  renderPlayer(document.getElementById('leftCol'), data.teamA, data.captains?.A, !!veto.ready?.A);
+  renderPlayer(document.getElementById('rightCol'), data.teamB, data.captains?.B, !!veto.ready?.B);
+
+  const canClickA = data.mySide === 'A' && !veto.ready?.A && data.status !== 'finished';
+  const canClickB = data.mySide === 'B' && !veto.ready?.B && data.status !== 'finished';
+  document.getElementById('topReady').innerHTML = `<div class="ready-row">
+    <button class="ready-btn ${veto.ready?.A ? 'ready' : ''}" ${canClickA ? '' : 'disabled'} onclick="markReady()"><span class="ready-icon">${veto.ready?.A ? '✓' : '✕'}</span> ${veto.ready?.A ? 'Готовы' : 'Не готовы'}</button>
+    <button class="ready-btn ${veto.ready?.B ? 'ready' : ''}" ${canClickB ? '' : 'disabled'} onclick="markReady()"><span class="ready-icon">${veto.ready?.B ? '✓' : '✕'}</span> ${veto.ready?.B ? 'Готовы' : 'Не готовы'}</button>
+  </div>`;
+
+  const maps = Array.isArray(data.maps) && data.maps.length ? data.maps : (veto.decider ? [veto.decider] : []);
+  if(Number(data.tournament.bo || 1) === 3){
+    const triplet = [maps[0] || veto.picks?.A?.[0] || null, maps[1] || veto.picks?.B?.[0] || null, maps[2] || veto.decider || null];
+    document.getElementById('mapBox').innerHTML = `<div class="small" style="margin-bottom:8px;font-weight:800">Map</div><div class="map-series">${triplet.map(m => `<div class="map-hero" style="${m ? mapBg(m) : ''}"><div><div class="map-hero-title">${esc(m ? mapLabel(m) : 'TBD')}</div></div></div>`).join('')}</div>`;
+  } else {
+    const activeMap = maps[0] || veto.decider || null;
+    document.getElementById('mapBox').innerHTML = `<div class="small" style="margin-bottom:8px;font-weight:800">Map</div><div class="map-hero" style="${activeMap ? mapBg(activeMap) : ''}"><div><div class="map-hero-title">${esc(activeMap ? mapLabel(activeMap) : 'TBD')}</div></div></div>`;
+  }
+
+  const remaining = Array.isArray(veto.remaining) ? veto.remaining : [];
+  const used = new Set((veto.actions || []).filter(a => a.map).map(a => a.map));
+  const allMaps = Array.isArray(data.tournament.mapPool) ? data.tournament.mapPool : [];
+  const vetoEnabled = bothReady && currentStep && currentStep.by === data.mySide && data.status !== 'finished';
+  document.getElementById('vetoBox').innerHTML = `<div class="small" style="font-weight:800">${bothReady ? (currentStep ? `Ход: ${esc(sideLabel(currentStep.by, data))} • ${currentStep.type === 'ban' ? 'бан' : 'пик'}` : 'Veto завершён') : 'Ожидаем готовность двух капитанов'}</div>
+    <div class="veto-list">${allMaps.map(map => { const disabled = !vetoEnabled || !remaining.includes(map); const cls = used.has(map) ? 'used' : (remaining.includes(map) ? 'active' : 'locked'); return `<button class="veto-item ${cls}" style="${mapBg(map)}" ${disabled ? 'disabled' : ''} onclick="doVeto('${map.replace(/'/g, '&#39;')}')"><div style="font-weight:800">${esc(mapLabel(map))}</div></button>`; }).join('')}</div>
+    <div style="margin-top:12px"><button class="btn" type="button" onclick="document.getElementById('historyBox').style.display = document.getElementById('historyBox').style.display === 'none' ? 'block' : 'none'">История банов</button></div>
+    <div id="historyBox" style="display:none;margin-top:10px">${(veto.actions || []).length ? (veto.actions || []).map(a => `<div class="hist-item">${esc(a.by === 'A' ? data.teamA.name : a.by === 'B' ? data.teamB.name : a.by)} • ${esc(a.type)}${a.map ? ` • ${esc(mapLabel(a.map))}` : ''}</div>`).join('') : '<div class="small">Пока без действий</div>'}</div>`;
+
+  document.getElementById('joinBox').innerHTML = bothReady && data.showServer && data.connect ? `<button class="btn primary" onclick="copyConnect('${esc(data.connect)}')">Присоединиться</button>` : '';
+  if(!data.showServer){ document.getElementById('joinBox').innerHTML += `<div class="small" style="margin-top:8px;">Режим зрителя: информация о сервере скрыта</div>`; }
+}
+loadRoom();
+setInterval(loadRoom, 2500);
+</script>
+</body>
+</html>
