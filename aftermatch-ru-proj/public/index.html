@@ -1,0 +1,17 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="shell-page">
+  <section class="glass-panel hero">
+    <div class="orb one"></div><div class="orb two"></div><div class="orb three"></div>
+    <div class="hero-copy">
+      <div class="kicker">welcome to glass competitive</div>
+      <h1 class="hero-title">aftermatch<br>control.</h1>
+      <p class="hero-sub">Вступительная страница вместо старой главной. Если пользователь уже авторизован — кидаем его сразу в турниры. Дальше здесь можно развить полноценный промо-лендинг.</p>
+      <div class="hero-actions"><a class="btn primary" href="/auth.html?mode=register">Создать аккаунт</a><a class="btn" href="/auth.html?mode=login">Войти</a></div>
+      <p class="tiny" style="margin-top:18px">Стеклянный стиль, единый вход, почта + Steam, и дальше уже переход на главную систему.</p>
+    </div>
+    <div class="panel-body center"><div class="card" style="width:min(420px,100%)"><div class="kicker">что уже заложено</div><div class="stack" style="margin-top:14px"><div class="badge">почта + код подтверждения</div><div class="badge">вход по почте или логину</div><div class="badge">восстановление пароля по почте</div><div class="badge">друзья и личные чаты</div><div class="badge">профиль и команда с месячным кулдауном</div></div></div></div>
+  </section>
+</div>
+<script>
+fetch('/api/auth/intro-state',{credentials:'include'}).then(r=>r.json()).then(d=>{ if(d.authenticated) location.href='/tournaments.html'; }).catch(()=>{});
+</script><script src="/app.js"></script></body></html>
