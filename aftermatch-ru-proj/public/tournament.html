@@ -34,7 +34,7 @@ function fmt(v){
   if(!v) return "—";
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return esc(v);
-  return d.toLocaleString("ru-RU", { timeZone: 'Europe/Moscow', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleString("ru-RU", { timeZone: 'Europe/Moscow', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) + " МСК";
 }
 function toast(msg, type="error"){ if(window.showToast) showToast(msg, type); else alert(msg); }
 
@@ -52,6 +52,14 @@ async function registerTeam() {
   load();
 }
 
+
+async function registerSolo(){
+  const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/register-player`, { method: "POST", credentials: "include" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) return toast((data && data.error) ? data.error : "Ошибка");
+  toast("Регистрация подтверждена ✅", "success");
+  load();
+}
 async function confirmCheckin() {
   const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}/checkin`, { method:"POST", credentials:"include" });
   const data = await res.json().catch(()=>null);
@@ -88,8 +96,11 @@ async function load() {
   document.title = `${t.name} — aftermatch.ru`;
 
   let joinHtml = "";
+  const allowSolo = String(t.mode||"" ).toLowerCase()==="1v1" || Number(t.allow_solo_players||0)===1;
   if (t.my_team_disqualified) {
     joinHtml = `<div class="badge">Команда дисквалифицирована</div>`;
+  } else if (allowSolo && !t.registration_is_closed && !t.my_team_registered && !t.checkin_confirmed && t.my_team===null) {
+    joinHtml = `<button class="btn primary" onclick="registerSolo()">Принять участие</button>`;
   } else if (t.i_am_captain && t.my_team && !t.my_team_registered && !t.registration_is_closed) {
     joinHtml = `<button class="btn primary" onclick="registerTeam()">Принять участие</button>`;
   } else if (t.i_am_captain && t.my_team_registered && !t.checkin_confirmed && t.checkin_is_open && !t.checkin_is_closed) {
@@ -105,14 +116,14 @@ async function load() {
   }
 
   document.getElementById("hero").innerHTML = `
-    <div class="tour-page-header" style="${t.page_cover_url ? `background-image:url(${t.page_cover_url});background-size:cover;background-position:center;` : ``}">
+    <div class="tour-page-header" style="${(t.page_cover_url||t.cover_url) ? `background-image:url(${t.page_cover_url||t.cover_url});background-size:cover;background-position:center;` : ``}">
       <div class="tour-page-overlay">
         <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;">
           <div>
             <div class="badge">${t.card_badge}</div>
             <div style="height:14px"></div>
             <div style="font-size:34px; font-weight:800; line-height:1.15;">${esc(t.name)}</div>
-            <div class="small" style="margin-top:10px; max-width:760px;">${esc(t.description || "")}</div>
+            <div class="small" style="margin-top:10px; max-width:760px;">${t.description || ""}</div>
           </div>
           <div>${joinHtml}</div>
         </div>
@@ -122,18 +133,18 @@ async function load() {
 
   document.getElementById("hubNav").innerHTML = `
     <div class="tournament-hub-buttons">
-      <a class="nav-btn-link tournament-hub-btn" href="/tournament-bracket.html?id=${encodeURIComponent(id)}">Сетка</a>
-      <a class="nav-btn-link tournament-hub-btn" href="/tournament-rules.html?id=${encodeURIComponent(id)}">Правила</a>
+      <a class="btn tournament-hub-btn" href="/tournament-bracket.html?id=${encodeURIComponent(id)}">Сетка</a>
+      <a class="btn tournament-hub-btn" href="/tournament-rules.html?id=${encodeURIComponent(id)}">Правила</a>
       ${t.is_admin ? `<a class="nav-btn-link tournament-hub-btn tournament-settings-btn" href="/tournament-settings.html?id=${encodeURIComponent(id)}"><img src="/src/Settings.ico" alt="" class="settings-icon" /></a>` : ``}
     </div>
   `;
 
   document.getElementById("details").innerHTML = `
     <h2>О турнире</h2>
-    <div class="small">${esc(t.description || "Описание пока не заполнено.")}</div>
+    <div class="small tournament-description">${(t.description || "Описание пока не заполнено.")}</div>
     <div style="height:12px"></div>
     <div class="small"><b>Формат:</b> ${esc(t.mode || "—")}</div>
-    <div class="small"><b>Сетка:</b> ${esc(t.bracket_mode || "single_elim")}</div>
+    <div class="small"><b>Сетка:</b> ${esc(t.bracket_mode || "single_elim")} · ${t.has_prizes ? "С призами" : "Без призовых"}</div>
     <div class="small"><b>Карты:</b><br/>${(t.map_pool || []).length ? (t.map_pool || []).map(m => `&nbsp;&nbsp;&nbsp;&nbsp;${esc(mapLabel(m))}`).join("<br/>") : "—"}</div>
     <div style="height:12px"></div>
     <div class="tournament-meta-grid">
@@ -190,14 +201,8 @@ async function load() {
   `;
 
   const launcher = document.getElementById("roomLauncherWrap");
-  if (Array.isArray(t.room_matches) && t.room_matches.length) {
-    const m = t.room_matches[0];
-    launcher.style.display = "flex";
-    launcher.innerHTML = `<a class="match-room-launcher" href="/match-room.html?id=${encodeURIComponent(m.matchId)}"><span class="match-room-launcher-glow"></span><span class="match-room-launcher-label">КОМНАТА МАТЧА</span></a>`;
-  } else {
-    launcher.style.display = "none";
-    launcher.innerHTML = "";
-  }
+  launcher.style.display = "none";
+  launcher.innerHTML = "";
 }
 load();
 </script>

@@ -1,7 +1,11 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Профиль — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body><div class="shell-page profile-page"><section id="profileHero" class="glass-panel profile-hero-card"><div class="profile-overlay"></div><div class="panel-body profile-hero-layout"></div></section><div class="grid one" style="margin-top:18px"><section class="glass-panel"><div class="panel-body stack"><div class="friend-head"><div><div class="kicker">social</div><h2>Друзья</h2></div><button id="openFriendSearch" class="friend-add-btn" title="Добавить в друзья">+</button></div><div id="friendSearchBox" class="friend-search-box"><div class="stack"><input id="friendSearchInput" placeholder="Найти пользователя по нику" /><div id="friendSearchResults"></div></div></div><div id="friendsWrap" class="list"></div></div></section></div></div><script>
 const id=new URLSearchParams(location.search).get('id');
 let meId=null, isMine=false, friendsData={friends:[],requests:[]}, playerData=null;
-const steamIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 8.66 5H19.5a4 4 0 1 1-1.2 2.86L13.9 12a3.5 3.5 0 1 1-1.62 1.85l4.52-2.6a4 4 0 1 1 .89 1.5l-4.22 2.42A3.5 3.5 0 1 1 10 11.06L6.95 9.8A2.75 2.75 0 1 0 8 15.14l3.33 1.38A10 10 0 0 0 12 2Z"/></svg>`;
+const friendSearchInputEl = document.getElementById('friendSearchInput');
+const friendSearchResultsEl = document.getElementById('friendSearchResults');
+const friendSearchBoxEl = document.getElementById('friendSearchBox');
+const openFriendSearchBtn = document.getElementById('openFriendSearch');
+const steamIcon = `<img src="/src/SteamIcon.ico" alt="Steam" />`;
 function esc(v=''){ return String(v).replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s])); }
 function pencilButton(cls, title){ return `<button class="edit-pencil ${cls}" title="${title}"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"></path><path d="M13 7l4 4"></path></svg></button>`; }
 function isFriend(userId){ return (friendsData.friends||[]).some(x => x.friend?.id === userId); }
@@ -30,6 +34,7 @@ function renderFriends(){
   friendsWrap.innerHTML = friendsHtml + requestsHtml;
   const addBtn=document.getElementById('openFriendSearch');
   if(addBtn) addBtn.style.display = isMine ? 'inline-flex' : 'none';
+  if(!isMine && friendSearchBoxEl) friendSearchBoxEl.classList.remove('open');
 }
 function renderHero(p){
   const banner = p.profile_banner_url || p.avatar_url || '';
@@ -60,9 +65,9 @@ async function sendFriendRequest(toUserId){ const r=await fetch('/api/friends/re
 async function respondReq(requestId,action){ const r=await fetch('/api/friends/respond',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,action})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); location.reload(); }
 async function openChatWith(userId){ const r=await fetch(`/api/chats/direct/${encodeURIComponent(userId)}`,{method:'POST',credentials:'include'}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); location.href = `/chats.html?chat=${encodeURIComponent(d.chatId)}`; }
 async function searchUsers(){
-  const q = friendSearchInput.value.trim(); if(!q) { friendSearchResults.innerHTML=''; return; }
+  const q = (friendSearchInputEl?.value || '').trim(); if(!q) { if(friendSearchResultsEl) friendSearchResultsEl.innerHTML=''; return; }
   const r=await fetch(`/api/players/search?q=${encodeURIComponent(q)}`,{credentials:'include'}); const d=await r.json().catch(()=>({players:[]}));
-  friendSearchResults.innerHTML = (d.players||[]).filter(x=>x.id!==meId).map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.avatar_url||''}')"></div><div>${esc(x.nickname)}</div></div><div class="list-item-actions"><button class="btn" onclick="sendFriendRequest('${x.id}')">Добавить</button></div></div>`).join('') || '<div class="muted">Ничего не найдено</div>';
+  if(friendSearchResultsEl) friendSearchResultsEl.innerHTML = (d.players||[]).filter(x=>x.id!==meId).map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.avatar_url||''}')"></div><div>${esc(x.nickname)}</div></div><div class="list-item-actions"><button class="btn" onclick="sendFriendRequest('${x.id}')">Добавить</button></div></div>`).join('') || '<div class="muted">Ничего не найдено</div>';
 }
 Promise.all([
   fetch(`/api/players/${id}`).then(r=>r.json()),
@@ -72,7 +77,7 @@ Promise.all([
   playerData = p; friendsData = friends||{friends:[],requests:[]}; meId = auth?.user?.id || null; isMine = !!meId && meId===id;
   if(isMine && p.steam_id64 && !p.avatar_url){ try{ await fetch('/api/me/steam-avatar/refresh',{method:'POST',credentials:'include'}); playerData = await fetch(`/api/players/${id}`).then(r=>r.json()); }catch{} }
   renderHero(playerData); renderFriends();
-  openFriendSearch?.addEventListener('click',()=>friendSearchBox.classList.toggle('open'));
-  friendSearchInput?.addEventListener('input', searchUsers);
+  openFriendSearchBtn?.addEventListener('click',()=>friendSearchBoxEl?.classList.toggle('open'));
+  friendSearchInputEl?.addEventListener('input', searchUsers);
 });
 </script><script src="/app.js"></script></body></html>

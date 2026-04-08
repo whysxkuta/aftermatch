@@ -156,3 +156,30 @@ h1,h2,h3{margin:0}h2{font-size:28px}p{margin:0}
 .glass-sidebar:not(:hover) .sidebar-link::before,.glass-sidebar:not(:hover) .sidebar-link::after{display:none !important;}
 .glass-sidebar:not(:hover) .sidebar-create.sidebar-logout{border:1px solid rgba(255,255,255,.09) !important;border-radius:18px;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)) !important;}
 .glass-sidebar:not(:hover) .sidebar-create.sidebar-logout .sidebar-icon{margin:0 auto;}
+
+
+/* v1.7 profile/team/tournament fixes */
+.profile-hero-card .panel-body.profile-hero-layout{align-items:end}
+.profile-avatar{margin-bottom:8px}
+.profile-main-copy{padding-bottom:8px}
+.steam-chip{margin-top:18px;background:linear-gradient(180deg, rgba(25,79,214,.42), rgba(25,79,214,.16));border-color:rgba(80,146,255,.68);box-shadow:0 0 26px rgba(50,108,255,.18), inset 0 0 24px rgba(63,131,255,.14)}
+.steam-chip img{width:18px;height:18px;display:block}
+.team-hero-layout .profile-main-copy{align-self:end}
+.team-hero-card .profile-avatar{margin-bottom:0}
+.role-block{padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.friend-search-box input{width:100%}
+.tournament-hub-btn.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.tour-page-header{border-radius:28px;overflow:hidden;min-height:240px;background-size:cover;background-position:center}
+.tour-page-overlay{padding:28px;background:linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.52));min-height:240px}
+.tournament-hub-nav{display:flex;justify-content:center}
+.tournament-hub-buttons{display:flex;align-items:center;justify-content:center;gap:12px}
+.tournament-meta-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.tournament-meta-card{padding:14px 16px}
+.tournament-description{margin-top:10px;line-height:1.75;white-space:pre-wrap}
+.match-room-sidebar-link .sidebar-icon{color:#ffb074}
+.glass-sidebar:not(:hover) .sidebar-link{padding:0}
+.glass-sidebar:not(:hover) .sidebar-icon{background:none!important;box-shadow:none!important}
+.glass-sidebar:not(:hover) .sidebar-link .sidebar-icon{background:none!important}
+.sidebar-link .sidebar-icon{background:none!important}
+.sidebar-create.sidebar-logout .sidebar-icon{background:none!important}
+@media (max-width:1180px){.tournament-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

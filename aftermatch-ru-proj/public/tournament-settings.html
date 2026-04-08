@@ -27,8 +27,11 @@
     <div style="height:10px"></div>
     <div class="row">
       <div class="col"><div class="small">Название</div><input id="name" /></div>
-      <div class="col"><div class="small">Краткое описание</div><input id="description" /></div>
     </div>
+    <div style="height:10px"></div>
+    <div class="small">Описание турнира</div>
+    <div class="row gap rich-toolbar"><button type="button" class="btn" onclick="fmt('bold')"><b>B</b></button><button type="button" class="btn" onclick="fmt('italic')"><i>I</i></button><button type="button" class="btn" onclick="fmt('strikeThrough')"><s>S</s></button><button type="button" class="btn" onclick="fmt('insertUnorderedList')">• List</button></div>
+    <div id="description" class="rich-editor" contenteditable="true"></div>
     <div style="height:10px"></div>
     <div class="row">
       <div class="col"><div class="small">Призовых мест</div><select id="prize_places" onchange="togglePrizeFields()"><option value="0">0</option><option value="1">1</option><option value="3">3</option></select></div>
@@ -98,6 +101,7 @@
 const id = new URLSearchParams(location.search).get("id");
 document.getElementById("backLink").href = `/tournament.html?id=${encodeURIComponent(id)}`;
 let SETTINGS = null;
+function fmt(cmd){ document.execCommand(cmd,false,null); document.getElementById("description")?.focus(); }
 function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const MOSCOW_TZ = "Europe/Moscow";
 function toMoscowInputValue(v){
@@ -163,7 +167,7 @@ window.toggleDone = function(id) {
 async function saveTournament() {
   const payload = {
     name: document.getElementById("name").value.trim(),
-    description: document.getElementById("description").value.trim(),
+    description: document.getElementById("description").innerHTML.trim(),
     cover_url: document.getElementById("cover_url").value.trim(),
     page_cover_url: document.getElementById("page_cover_url").value.trim(),
     prize_places: Number(document.getElementById("prize_places").value || 0),
@@ -254,7 +258,7 @@ async function load() {
   const t = data.tournament;
   document.getElementById("pageTitle").textContent = `Настройки • ${t.name}`;
   document.getElementById("name").value = t.name || "";
-  document.getElementById("description").value = t.description || "";
+  document.getElementById("description").innerHTML = t.description || "";
   document.getElementById("cover_url").value = t.cover_url || "";
   document.getElementById("page_cover_url").value = t.page_cover_url || "";
   document.getElementById("prize_places").value = String(t.prize_places || 0);

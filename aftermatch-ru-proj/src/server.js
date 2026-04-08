@@ -74,6 +74,24 @@ const MAILGUN_API_KEY = String(process.env.MAILGUN_API_KEY || "").trim();
 const MAILGUN_DOMAIN = String(process.env.MAILGUN_DOMAIN || "").trim();
 const MAILGUN_BASE_URL = String(process.env.MAILGUN_BASE_URL || "https://api.mailgun.net").trim().replace(/\/$/, "");
 
+const MAIL_TEMPLATE_PATH = path.join(process.cwd(), 'src', 'mail-templates', 'auth-code.html');
+function escapeHtml(value = '') { return String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+function renderMailTemplate({ title='Код подтверждения', intro='Мы отправили вам код подтверждения.', codeLabel='КОД', code='', expiresText='Код действует ограниченное время.' } = {}) {
+  let raw = '';
+  try { raw = fs.readFileSync(MAIL_TEMPLATE_PATH, 'utf8'); }
+  catch {
+    return `<div style="font-family:Arial,sans-serif;background:#0b0d12;color:#fff;padding:24px"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(intro)}</p><p style="font-size:32px;font-weight:bold">${escapeHtml(code)}</p><p>${escapeHtml(expiresText)}</p></div>`;
+  }
+  return raw
+    .replaceAll('{{APP_NAME}}', 'aftermatch.ru')
+    .replaceAll('{{TITLE}}', escapeHtml(title))
+    .replaceAll('{{INTRO}}', escapeHtml(intro))
+    .replaceAll('{{CODE_LABEL}}', escapeHtml(codeLabel))
+    .replaceAll('{{CODE}}', escapeHtml(code))
+    .replaceAll('{{EXPIRES_TEXT}}', escapeHtml(expiresText))
+    .replaceAll('{{YEAR}}', String(new Date().getFullYear()));
+}
+
 async function sendMailSafe({ to, subject, text, html }) {
   if (MAIL_PROVIDER !== 'mailgun') {
     console.log(`[mail:skip] ${subject} -> ${to} (MAIL_PROVIDER=${MAIL_PROVIDER || 'empty'})`);
@@ -163,6 +181,7 @@ function hasColumn(table, column) {
 const HAS_USER_EMAIL = hasColumn("users", "email");
 const HAS_USER_BANNED_UNTIL = hasColumn("users", "banned_until");
 const HAS_USER_BAN_REASON = hasColumn("users", "ban_reason");
+try { if (!hasColumn('teams', 'banner_url')) db.exec("ALTER TABLE teams ADD COLUMN banner_url TEXT"); } catch {}
 
 function userEmailSupported() {
   try { return hasColumn('users', 'email'); } catch { return false; }
@@ -292,7 +311,11 @@ function requireAdmin(req, res, next) {
 
 function isCaptainOfTeam(teamId, userId) {
   const row = db.prepare(`SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`).get(teamId, userId);
-  return !!row && row.role === "captain";
+  if (row && row.role === 'captain') return true;
+  const team = db.prepare(`SELECT captain_user_id FROM teams WHERE id = ?`).get(teamId);
+  if (team?.captain_user_id && team.captain_user_id === userId) return true;
+  const first = db.prepare(`SELECT user_id FROM team_members WHERE team_id = ? ORDER BY joined_at ASC LIMIT 1`).get(teamId);
+  return !!first && first.user_id === userId;
 }
 
 function getTeamMembers(teamId) {
@@ -894,17 +917,26 @@ app.post("/api/teams/:id/leave", requireAuth, (req, res) => {
   res.json({ ok: true, deleted: false });
 });
 
+app.get("/api/me/active-match-room", requireAuth, (req, res) => {
+  const userId = req.session.user_id;
+  const rows = db.prepare(`SELECT id FROM matches WHERE status IN ('awaiting_ready','veto','live','scheduled') ORDER BY updated_at DESC, created_at DESC`).all();
+  const row = rows.find(r => canUserOpenMatchRoom(r.id, userId));
+  if (!row) return res.json({ ok:true, href:null });
+  res.json({ ok:true, href:`/match-room.html?id=${row.id}` });
+});
+
 app.get("/api/me/team", requireAuth, (req, res) => {
   const row = db.prepare(`
-    SELECT tm.team_id, tm.role, t.name as team_name, t.tournament_id
+    SELECT tm.team_id, tm.role, t.name as team_name, t.tournament_id, t.captain_user_id
     FROM team_members tm
     JOIN teams t ON t.id = tm.team_id
     WHERE tm.user_id = ?
     ORDER BY t.created_at DESC
     LIMIT 1
   `).get(req.session.user_id);
-
-  res.json(row || null);
+  if (!row) return res.json(null);
+  const role = (row.role === 'captain' || row.captain_user_id === req.session.user_id) ? 'captain' : (row.role || 'main');
+  res.json({ ...row, role });
 });
 
 
@@ -1214,7 +1246,7 @@ app.get("/api/tournaments/:id", (req, res) => {
   if (session?.user_id) {
     const myTeam = getMyTeam(session.user_id);
     t.my_team = myTeam || null;
-    t.i_am_captain = !!myTeam && !!db.prepare(`SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ? AND role = 'captain'`).get(myTeam.id, session.user_id);
+    t.i_am_captain = !!myTeam && isCaptainOfTeam(myTeam.id, session.user_id);
     const reg = myTeam ? db.prepare(`SELECT confirmed_at, disqualified_at, disqualification_reason FROM tournament_registrations WHERE tournament_id = ? AND team_id = ?`).get(t.id, myTeam.id) : null;
     t.my_team_registered = !!reg;
     t.checkin_confirmed = !!reg?.confirmed_at;
@@ -2000,8 +2032,7 @@ app.post(/^\/api\/teams\/([^\/]+)\/invite\/?$/, requireAuth, (req, res) => {
   const team = db.prepare(`SELECT id FROM teams WHERE id = ?`).get(teamId);
   if (!team) return res.status(404).json({ error: "Команда не найдена" });
 
-  const captain = db.prepare(`SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`).get(teamId, req.session.user_id);
-  if (!captain || captain.role !== "captain") return res.status(403).json({ error: "Только капитан может приглашать" });
+  if (!isCaptainOfTeam(teamId, req.session.user_id)) return res.status(403).json({ error: "Только капитан может приглашать" });
 
   const invited = db.prepare(`
     SELECT id, role FROM users
@@ -2193,8 +2224,7 @@ app.post("/api/me/banner", requireAuth, (req, res) => {
 
 app.post("/api/teams/:id/avatar", requireAuth, (req, res) => {
   const teamId = String(req.params.id);
-  const role = db.prepare(`SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`).get(teamId, req.session.user_id);
-  if (!role || role.role !== "captain") return res.status(403).json({ error: "Только капитан" });
+  if (!isCaptainOfTeam(teamId, req.session.user_id)) return res.status(403).json({ error: "Только капитан" });
 
   const dataUrl = req.body?.dataUrl || req.body?.dataURL || null;
   if (!dataUrl || typeof dataUrl !== "string") return res.status(400).json({ error: "Missing dataURL" });
@@ -2212,6 +2242,21 @@ app.post("/api/teams/:id/avatar", requireAuth, (req, res) => {
   db.prepare(`UPDATE teams SET avatar_url = ? WHERE id = ?`).run(url, teamId);
 
   res.json({ ok: true, avatarUrl: url });
+});
+
+
+app.post("/api/teams/:id/banner", requireAuth, (req, res) => {
+  const teamId = String(req.params.id);
+  if (!isCaptainOfTeam(teamId, req.session.user_id)) return res.status(403).json({ error: "Только капитан" });
+  const dataUrl = req.body?.dataUrl || req.body?.dataURL || null;
+  if (!dataUrl || typeof dataUrl !== 'string') return res.status(400).json({ error: 'Missing dataURL' });
+  const dir = path.join(process.cwd(), 'public', 'uploads', 'banners');
+  const outBase = path.join(dir, `team_${teamId}.webp`);
+  const saved = saveBase64Image(dataUrl, outBase);
+  if (saved.error) return res.status(400).json({ error: saved.error });
+  const url = `/uploads/banners/team_${teamId}.${saved.ext}?v=${Date.now()}`;
+  db.prepare(`UPDATE teams SET banner_url = ? WHERE id = ?`).run(url, teamId);
+  res.json({ ok: true, bannerUrl: url });
 });
 
 app.patch("/api/users/:id", requireAdmin, (req, res) => {
@@ -2281,8 +2326,7 @@ app.post("/api/tournaments/:id/register-team", requireAuth, (req, res) => {
   const team = getMyTeam(userId);
   if (!team) return res.status(409).json({ error: "Сначала создай команду" });
 
-  const captain = db.prepare(`SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ? AND role = 'captain'`).get(team.id, userId);
-  if (!captain) return res.status(403).json({ error: "Только капитан может зарегистрировать команду" });
+  if (!isCaptainOfTeam(team.id, userId)) return res.status(403).json({ error: "Только капитан может зарегистрировать команду" });
 
   if (tournamentRegistrationIsClosed(tournament)) {
     return res.status(409).json({ error: "Регистрация на турнир закрыта" });
@@ -2321,8 +2365,7 @@ app.post("/api/tournaments/:id/checkin", requireAuth, (req, res) => {
   if (!tournament) return res.status(404).json({ error: "Tournament not found" });
   const team = getMyTeam(req.session.user_id);
   if (!team) return res.status(409).json({ error: "Сначала создай команду" });
-  const captain = db.prepare(`SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ? AND role = 'captain'`).get(team.id, req.session.user_id);
-  if (!captain) return res.status(403).json({ error: "Только капитан может подтвердить участие" });
+  if (!isCaptainOfTeam(team.id, req.session.user_id)) return res.status(403).json({ error: "Только капитан может подтвердить участие" });
   const reg = db.prepare(`SELECT confirmed_at, disqualified_at FROM tournament_registrations WHERE tournament_id = ? AND team_id = ?`).get(tournamentId, team.id);
   if (!reg) return res.status(404).json({ error: "Команда не зарегистрирована на турнир" });
   if (reg.disqualified_at) return res.status(409).json({ error: "Команда уже дисквалифицирована" });
@@ -2374,7 +2417,7 @@ app.patch("/api/teams/:id/members/:userId/role", requireAuth, (req, res) => {
   if ((counts.main + counts.captain) > 5) return res.status(409).json({ error: 'Основных игроков может быть максимум 5' });
   if (counts.substitute > 2) return res.status(409).json({ error: 'Запасных может быть максимум 2' });
   if (counts.coach > 1) return res.status(409).json({ error: 'Тренер может быть только один' });
-  if (role === 'captain') db.prepare(`UPDATE team_members SET role = 'main' WHERE team_id = ? AND role = 'captain'`).run(teamId);
+  if (role === 'captain') { db.prepare(`UPDATE team_members SET role = 'main' WHERE team_id = ? AND role = 'captain'`).run(teamId); db.prepare(`UPDATE teams SET captain_user_id = ? WHERE id = ?`).run(targetUserId, teamId); }
   db.prepare(`UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?`).run(role, teamId, targetUserId);
   res.json({ ok: true, members: getTeamMembers(teamId) });
 });
@@ -2391,9 +2434,7 @@ app.get("/api/teams/:id", (req, res) => {
 
   const session = getSession(req.cookies?.[SESSION_COOKIE]);
   const userId = session?.user_id || null;
-  const myRole = userId
-    ? (db.prepare(`SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`).get(teamId, userId)?.role || null)
-    : null;
+  const myRole = userId ? (isCaptainOfTeam(teamId, userId) ? 'captain' : (db.prepare(`SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`).get(teamId, userId)?.role || null)) : null;
 
   const members = db.prepare(`
     SELECT u.id AS user_id, u.nickname, u.first_name, u.last_name, u.middle_name, u.steam_id64, u.steam_profile_name, u.avatar_url,
@@ -2402,8 +2443,8 @@ app.get("/api/teams/:id", (req, res) => {
     FROM team_members tm
     JOIN users u ON u.id = tm.user_id
     WHERE tm.team_id = ?
-    ORDER BY CASE tm.role WHEN 'captain' THEN 0 ELSE 1 END, u.nickname ASC
-  `).all(nowIso(), teamId);
+    ORDER BY CASE tm.role WHEN 'captain' THEN 0 WHEN 'main' THEN 1 ELSE 2 END, u.nickname ASC
+  `).all(nowIso(), teamId).map(m => ({...m, role: m.role === 'player' ? 'main' : m.role}));
 
   const invites = db.prepare(`
     SELECT ti.id, ti.status, ti.created_at,

@@ -10,7 +10,6 @@
   const current=location.pathname;
   const profileHref = me ? `/player.html?id=${encodeURIComponent(me.id)}` : '/auth.html?mode=login';
   const icons={
-    home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
     tournaments:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10"/><path d="M8 4v4a4 4 0 0 0 8 0V4"/><path d="M6 4H4a3 3 0 0 0 3 3"/><path d="M18 4h2a3 3 0 0 1-3 3"/><path d="M12 12v4"/><path d="M9 21h6"/></svg>',
     profile:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
     team:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 20a5 5 0 0 1 10 0"/><path d="M11 20a5 5 0 0 1 10 0"/></svg>',
@@ -26,7 +25,8 @@
   if (me) items.push(['/team-page.html','Команда',icons.team]);
   sidebar.innerHTML=`<div class="sidebar-brand"><div class="sidebar-logo"></div><div><div class="sidebar-title">aftermatch.ru</div></div></div><nav class="sidebar-nav"></nav><div class="sidebar-bottom"></div>`;
   const nav=sidebar.querySelector('.sidebar-nav');
-  items.forEach(([href,label,icon,home])=>{ const a=document.createElement('a'); a.className='sidebar-link'; a.href=href; if((home && (current==='/'||current==='/index.html')) || (!home && current===href)) a.classList.add('active'); a.innerHTML=`<span class="sidebar-icon">${icon}</span><span class="sidebar-text">${label}</span>`; nav.appendChild(a); });
+  for (const [href,label,icon] of items){ const a=document.createElement('a'); a.className='sidebar-link'; a.href=href; if(current===href) a.classList.add('active'); a.innerHTML=`<span class="sidebar-icon">${icon}</span><span class="sidebar-text">${label}</span>`; nav.appendChild(a); }
+  if(me){ const room=document.createElement('a'); room.className='sidebar-link sidebar-match-room'; room.style.display='none'; room.innerHTML=`<span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6v10H4z"/><path d="M14 7h6v10h-6z"/><path d="M10 10l4 4"/><path d="M14 10l-4 4"/></svg></span><span class="sidebar-text">Комната матча</span>`; try{ const r=await fetch('/api/me/active-match-room',{credentials:'include'}); const d=await r.json().catch(()=>({})); if(r.ok && d?.href){ room.href=d.href; room.style.display='inline-flex'; nav.insertBefore(room, nav.children[1] || null); } }catch{} }
   const bottom=sidebar.querySelector('.sidebar-bottom');
   if(me){ const btn=document.createElement('button'); btn.className='sidebar-create sidebar-logout'; btn.innerHTML=`<span class="sidebar-icon">${icons.logout}</span><span class="sidebar-text">Выйти</span>`; btn.onclick=async()=>{await fetch('/api/auth/logout',{method:'POST',credentials:'include'}); location.href='/';}; bottom.appendChild(btn); }
   else { const a=document.createElement('a'); a.className='sidebar-create'; a.href='/auth.html?mode=login'; a.innerHTML=`<span class="sidebar-icon">${icons.login}</span><span class="sidebar-text">Войти</span>`; bottom.appendChild(a); }
