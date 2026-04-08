@@ -1,0 +1,73 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Профиль — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body><div class="shell-page profile-page"><section id="profileHero" class="glass-panel profile-hero-card"><div class="profile-overlay"></div><div class="panel-body profile-hero-layout"></div></section><div class="grid one" style="margin-top:18px"><section class="glass-panel"><div class="panel-body stack"><div><div class="kicker">social</div><h2>Друзья</h2></div><div id="friendsWrap" class="list"></div></div></section></div></div><script>
+const id=new URLSearchParams(location.search).get('id');
+let meId = null;
+let isMine = false;
+const steamIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 8.66 5H19.5a4 4 0 1 1-1.2 2.86L13.9 12a3.5 3.5 0 1 1-1.62 1.85l4.52-2.6a4 4 0 1 1 .89 1.5l-4.22 2.42A3.5 3.5 0 1 1 10 11.06L6.95 9.8A2.75 2.75 0 1 0 8 15.14l3.33 1.38A10 10 0 0 0 12 2Z"/></svg>`;
+
+function pencilButton(cls, title){ return `<button class="edit-pencil ${cls}" title="${title}"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"></path><path d="M13 7l4 4"></path></svg></button>`; }
+function escapeHtml(v=''){ return String(v).replace(/[&<>\"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s])); }
+function mapFriends(friends){ return (friends.friends||[]).map(x=>`<div class="list-item"><div class="row gap"><div class="avatar sm" style="background-image:url('${x.friend?.avatar_url||''}')"></div><div>${escapeHtml(x.friend?.nickname||'—')}</div></div></div>`).join(''); }
+function mapRequests(friends){ return (friends.requests||[]).map(x=>`<div class="list-item"><div>${escapeHtml(x.nickname)}</div><div class="hero-actions"><button class="btn" onclick="respondReq('${x.id}','accept')">Принять</button><button class="btn" onclick="respondReq('${x.id}','decline')">Отклонить</button></div></div>`).join(''); }
+
+async function compressImage(file, mode='avatar'){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((resolve,reject)=>{ const i=new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=url; });
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d');
+  const target = mode==='banner' ? {w:1600,h:420,q:.84} : {w:512,h:512,q:.88};
+  canvas.width=target.w; canvas.height=target.h;
+  const srcRatio=img.width/img.height, dstRatio=target.w/target.h;
+  let sx=0, sy=0, sw=img.width, sh=img.height;
+  if(srcRatio>dstRatio){ sw=img.height*dstRatio; sx=(img.width-sw)/2; }
+  else { sh=img.width/dstRatio; sy=(img.height-sh)/2; }
+  ctx.drawImage(img,sx,sy,sw,sh,0,0,target.w,target.h);
+  URL.revokeObjectURL(url);
+  return canvas.toDataURL('image/webp', target.q);
+}
+
+async function uploadImage(endpoint, file, mode){
+  const dataUrl = await compressImage(file, mode);
+  const r = await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl})});
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||'Ошибка загрузки');
+  return d;
+}
+
+async function pickAndUpload(endpoint, mode){
+  const input=document.createElement('input'); input.type='file'; input.accept='image/png,image/jpeg,image/webp';
+  input.onchange=async()=>{ const f=input.files?.[0]; if(!f) return; try{ await uploadImage(endpoint,f,mode); showToast('Сохранено','success'); location.reload(); }catch(e){ showToast(e.message||'Ошибка'); } };
+  input.click();
+}
+
+Promise.all([
+  fetch(`/api/players/${id}`).then(r=>r.json()),
+  fetch('/api/friends',{credentials:'include'}).then(r=>r.ok?r.json():{friends:[],requests:[]}),
+  fetch('/api/auth/me',{credentials:'include'}).then(r=>r.ok?r.json():{user:null})
+]).then(async ([p,friends,auth])=>{
+  meId = auth?.user?.id || null;
+  isMine = !!meId && meId===id;
+  if(isMine && p.steam_id64 && !p.avatar_url){ try{ await fetch('/api/me/steam-avatar/refresh',{method:'POST',credentials:'include'}); p = await fetch(`/api/players/${id}`).then(r=>r.json()); }catch{} }
+  const banner = p.profile_banner_url || p.avatar_url || '';
+  profileHero.style.backgroundImage=`url(${banner})`;
+  const steamUrl = p.steam_id64 ? `https://steamcommunity.com/profiles/${p.steam_id64}` : '#';
+  profileHero.querySelector('.panel-body').innerHTML=`
+    <div class="avatar-wrap">
+      <div class="avatar lg profile-avatar" style="background-image:url('${p.avatar_url||''}')"></div>
+      ${isMine ? pencilButton('avatar-pencil','Изменить аватар') : ''}
+    </div>
+    <div class="profile-main-copy">
+      <div class="kicker">игрок</div>
+      <div class="profile-title-row"><h1>${escapeHtml(p.nickname||'Игрок')}</h1>${isMine ? `<button id="changeNickBtn" class="edit-pencil inline visible" title="Изменить ник"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"></path><path d="M13 7l4 4"></path></svg></button>` : ''}</div>
+      <div class="muted">${escapeHtml([p.first_name,p.last_name].filter(Boolean).join(' ')||'')}</div>
+      ${p.steam_id64 ? `<a class="steam-chip" href="${steamUrl}" target="_blank" rel="noreferrer">${steamIcon}<span>${escapeHtml(p.steam_profile_name||'Steam')}</span></a>` : ''}
+    </div>
+    <div class="profile-hero-actions">${isMine ? pencilButton('banner-pencil visible','Изменить шапку') : ''}</div>`;
+  friendsWrap.innerHTML = (friends.friends?.length?mapFriends(friends):'<div class="muted">Пока пусто</div>') + ((friends.requests||[]).length?`<div class="kicker" style="margin-top:14px">входящие заявки</div>${mapRequests(friends)}`:'');
+  if(isMine){
+    document.querySelector('.avatar-pencil')?.addEventListener('click',()=>pickAndUpload('/api/me/avatar','avatar'));
+    document.querySelector('.banner-pencil')?.addEventListener('click',()=>pickAndUpload('/api/me/banner','banner'));
+    document.getElementById('changeNickBtn')?.addEventListener('click', async()=>{ const nickname=prompt('Новый ник'); if(!nickname) return; const r=await fetch('/api/auth/nickname',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); showToast('Ник обновлён','success'); location.reload(); });
+  }
+});
+async function respondReq(requestId,action){ const r=await fetch('/api/friends/respond',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,action})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); location.reload(); }
+</script><script src="/app.js"></script></body></html>
