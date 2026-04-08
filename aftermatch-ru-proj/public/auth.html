@@ -1,0 +1,124 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Вход — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="shell-page"><section class="glass-panel"><div class="panel-body grid two"><div class="stack"><h2>Вход и регистрация</h2><div class="auth-tabs"><button class="auth-tab active" data-tab="login">Вход</button><button class="auth-tab" data-tab="register">Регистрация</button><button class="auth-tab" data-tab="reset">Сброс пароля</button></div></div>
+<div class="card stack">
+<form id="loginForm" class="stack"><input name="login" placeholder="Почта или логин"><input name="password" type="password" placeholder="Пароль"><button class="btn primary">Войти</button><a class="btn" href="/auth/steam?mode=login">Войти через Steam</a></form>
+<form id="registerForm" class="stack hidden"><div class="form-grid"><input name="firstName" placeholder="Имя"><input name="lastName" placeholder="Фамилия"><input name="middleName" placeholder="Отчество"><input name="nickname" placeholder="Логин"><input name="email" placeholder="Почта"><input name="code" placeholder="Код из письма"></div><input name="password" type="password" placeholder="Пароль"><div class="hero-actions"><button type="button" class="btn" id="sendRegisterCode">Отправить код</button><a class="btn" href="/auth/steam?mode=register">Привязать Steam</a></div><button class="btn primary">Создать аккаунт</button></form>
+<form id="resetForm" class="stack hidden"><input name="email" placeholder="Почта"><div class="hero-actions"><button type="button" class="btn" id="sendResetCode">Отправить код</button></div><input name="code" placeholder="Код из письма"><input name="password" type="password" placeholder="Новый пароль"><button class="btn primary">Сменить пароль</button></form>
+</div></div></section></div>
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const loginForm = $('loginForm');
+  const registerForm = $('registerForm');
+  const resetForm = $('resetForm');
+  const sendRegisterCode = $('sendRegisterCode');
+  const sendResetCode = $('sendResetCode');
+  const tabs = [...document.querySelectorAll('[data-tab]')];
+  const forms = { login: loginForm, register: registerForm, reset: resetForm };
+
+  function toast(message, type='error'){
+    if (typeof window.showToast === 'function') return window.showToast(message, type);
+    alert(message);
+  }
+
+  function setBusy(button, busy, busyText='Отправка...'){
+    if (!button) return;
+    if (busy){
+      if (!button.dataset.label) button.dataset.label = button.textContent;
+      button.disabled = true;
+      button.textContent = busyText;
+    } else {
+      button.disabled = false;
+      button.textContent = button.dataset.label || button.textContent;
+    }
+  }
+
+  function setTab(tab){
+    tabs.forEach((x)=>x.classList.toggle('active', x.dataset.tab===tab));
+    Object.entries(forms).forEach(([k,v])=>v.classList.toggle('hidden', k!==tab));
+    history.replaceState({}, '', `/auth.html?mode=${tab}`);
+  }
+
+  async function api(url, opts={}){
+    const response = await fetch(url, {
+      credentials:'include',
+      headers:{ 'Content-Type':'application/json', ...(opts.headers||{}) },
+      ...opts
+    });
+    const data = await response.json().catch(()=>({}));
+    if (!response.ok) throw new Error(data.error || `Ошибка ${response.status}`);
+    return data;
+  }
+
+  tabs.forEach((button)=>button.addEventListener('click', ()=>setTab(button.dataset.tab)));
+  setTab(new URLSearchParams(location.search).get('mode') || 'login');
+
+  loginForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(loginForm);
+    try {
+      await api('/api/auth/login', { method:'POST', body:JSON.stringify(Object.fromEntries(fd)) });
+      location.href = '/tournaments.html';
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  registerForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(registerForm);
+    try {
+      await api('/api/auth/register', { method:'POST', body:JSON.stringify(Object.fromEntries(fd)) });
+      location.href = '/tournaments.html';
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  resetForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(resetForm);
+    try {
+      await api('/api/auth/reset-password', { method:'POST', body:JSON.stringify(Object.fromEntries(fd)) });
+      toast('Пароль обновлён', 'success');
+      setTab('login');
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  sendRegisterCode.addEventListener('click', async ()=>{
+    const email = String(registerForm.elements.email.value || '').trim();
+    if (!email) return toast('Сначала укажи почту');
+    setBusy(sendRegisterCode, true);
+    try {
+      await api('/api/auth/send-register-code', { method:'POST', body:JSON.stringify({ email }) });
+      toast('Код отправлен', 'success');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      setBusy(sendRegisterCode, false);
+    }
+  });
+
+  sendResetCode.addEventListener('click', async ()=>{
+    const email = String(resetForm.elements.email.value || '').trim();
+    if (!email) return toast('Сначала укажи почту');
+    setBusy(sendResetCode, true);
+    try {
+      await api('/api/auth/request-password-reset', { method:'POST', body:JSON.stringify({ email }) });
+      toast('Если почта существует, код отправлен', 'success');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      setBusy(sendResetCode, false);
+    }
+  });
+
+  const err = new URLSearchParams(location.search).get('err');
+  if (err === 'steam_already_linked') {
+    toast('Этот Steam уже привязан к другому аккаунту');
+    setTab('register');
+  }
+})();
+</script><script src="/app.js"></script></body></html>
