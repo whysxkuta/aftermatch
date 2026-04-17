@@ -592,6 +592,38 @@ function generateVisualBracket(type, size) {
   return type === "double" ? generateDoubleVisualBracket(size) : generateSingleVisualBracket(size);
 }
 
+
+function buildVisualBracketFromMatches(tournamentId, type, size) {
+  const matches = getBracketMatches(tournamentId);
+  if (!matches.length) return null;
+  const byRound = new Map();
+  for (const m of matches) {
+    const round = Number(m.round_number || 1);
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round).push(m);
+  }
+  const rounds = [...byRound.keys()].sort((a,b)=>a-b);
+  const columns = rounds.map((round, idx) => {
+    const roundMatches = byRound.get(round).sort((a,b)=>Number(a.slot_number||0)-Number(b.slot_number||0));
+    const isFinal = idx === rounds.length - 1;
+    return {
+      key: `R${round}`,
+      title: isFinal ? 'Финал' : `Раунд ${round}`,
+      matches: roundMatches.map(m => ({
+        id: m.id,
+        matchId: m.match_id || null,
+        teamA: m.teamA?.name || 'TBD',
+        teamB: m.teamB?.name || 'TBD',
+        scoreA: m.score_a ?? '',
+        scoreB: m.score_b ?? '',
+        winner: m.winner_team_id ? (m.winner_team_id === m.team_a_id ? 'A' : (m.winner_team_id === m.team_b_id ? 'B' : null)) : null,
+        active: ['live','veto','awaiting_ready','ready'].includes(String(m.current_status || m.status || '').toLowerCase())
+      }))
+    };
+  });
+  return { type: type === 'double' ? 'double' : 'single', size: Number(size || matches.length * 2 || 0), columns };
+}
+
 function canViewPublicBracket(tournament, userId) {
   if (Number(tournament.bracket_public || 0) === 1) return true;
   if (!userId) return false;
@@ -1090,13 +1122,28 @@ app.get("/api/friends", requireAuth, (req, res) => {
 });
 
 app.post("/api/friends/request", requireAuth, (req, res) => {
-  const toUserId = String(req.body?.userId || "");
-  const fromUserId = req.session.user_id;
-  if (!toUserId || toUserId === fromUserId) return res.status(400).json({ error: "Некорректный пользователь" });
+  const rawTarget = req.body?.toUserId ?? req.body?.userId ?? req.body?.id ?? "";
+  const toUserId = String(rawTarget || "").trim();
+  const fromUserId = String(req.session.user_id || "").trim();
+  if (!toUserId || !fromUserId || toUserId === fromUserId) {
+    return res.status(400).json({ error: "Некорректный пользователь" });
+  }
+
+  const targetUser = db.prepare(`SELECT id FROM users WHERE id = ?`).get(toUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "Пользователь не найден" });
+  }
+
   const [a,b] = orderedFriendPair(fromUserId, toUserId);
-  if (db.prepare(`SELECT 1 FROM friends WHERE user_a_id = ? AND user_b_id = ?`).get(a,b)) return res.status(409).json({ error: "Вы уже друзья" });
+  if (db.prepare(`SELECT 1 FROM friends WHERE user_a_id = ? AND user_b_id = ?`).get(a,b)) {
+    return res.status(409).json({ error: "Вы уже друзья" });
+  }
+
   const pending = db.prepare(`SELECT 1 FROM friend_requests WHERE ((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND status = 'pending'`).get(fromUserId,toUserId,toUserId,fromUserId);
-  if (pending) return res.status(409).json({ error: "Заявка уже существует" });
+  if (pending) {
+    return res.status(409).json({ error: "Заявка уже существует" });
+  }
+
   db.prepare(`INSERT INTO friend_requests (id, from_user_id, to_user_id, status, created_at) VALUES (?, ?, ?, 'pending', ?)`).run(nanoid(10), fromUserId, toUserId, nowIso());
   res.json({ ok: true });
 });
@@ -1925,6 +1972,9 @@ app.get("/api/tournaments/:id/visual-bracket", (req, res) => {
     bracket = row.visual_bracket_json ? JSON.parse(row.visual_bracket_json) : null;
   } catch {
     bracket = null;
+  }
+  if (!bracket || !Array.isArray(bracket.columns || bracket.sections || [])) {
+    bracket = buildVisualBracketFromMatches(row.id, row.visual_bracket_type || 'single', Number(row.visual_bracket_size || 0));
   }
 
   res.json({

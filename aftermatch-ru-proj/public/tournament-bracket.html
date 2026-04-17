@@ -27,16 +27,25 @@ const id = new URLSearchParams(location.search).get("id");
 document.getElementById("backLink").href = `/tournament.html?id=${encodeURIComponent(id)}`;
 function esc(s){ return (s ?? "").toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+function renderTeamRow(name, score, cls) {
+  return `<div class="vb-team ${cls || ''}">${esc(name || 'TBD')} <span>${score !== null && score !== undefined && String(score) !== '' ? esc(score) : ''}</span></div>`;
+}
 function renderCols(columns) {
-  return `<div class="visual-bracket">${columns.map(col => `
+  return `<div class="visual-bracket">${columns.map((col, colIndex) => `
     <div class="vb-col">
       <div class="vb-title">${esc(col.title)}</div>
-      ${col.matches.map(m => `
-        <div class="vb-match">
-          <div class="vb-team">${esc(m.teamA || "TBD")} <span>${esc(m.scoreA || "")}</span></div>
-          <div class="vb-team">${esc(m.teamB || "TBD")} <span>${esc(m.scoreB || "")}</span></div>
-        </div>
-      `).join("")}
+      <div class="vb-stack">
+      ${(col.matches || []).map((m, matchIndex) => {
+        const matchHref = m.matchId ? `/match-room.html?id=${encodeURIComponent(m.matchId)}` : '#';
+        const activeCls = m.active ? ' active' : '';
+        const clickableCls = m.matchId ? ' clickable' : '';
+        const aCls = m.winner === 'A' ? 'win' : (m.winner === 'B' ? 'lose' : '');
+        const bCls = m.winner === 'B' ? 'win' : (m.winner === 'A' ? 'lose' : '');
+        const body = `${renderTeamRow(m.teamA, m.scoreA, aCls)}${renderTeamRow(m.teamB, m.scoreB, bCls)}`;
+        const lineCls = colIndex < (columns.length - 1) ? ' with-line' : '';
+        return `<div class="vb-node${lineCls}">${m.matchId ? `<a class="vb-match${activeCls}${clickableCls}" href="${matchHref}">${body}</a>` : `<div class="vb-match${activeCls}">${body}</div>`}</div>`;
+      }).join("")}
+      </div>
     </div>
   `).join("")}</div>`;
 }
