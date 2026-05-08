@@ -1,0 +1,24 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Турниры — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body><div class="shell-page"><section class="glass-panel"><div class="panel-body stack"><div><div class="kicker">tournaments</div><h2>Турниры</h2></div><div id="tourGrid" class="grid three"></div></div></section></div><script>
+function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function formatHumanMsk(value){
+  if(!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d).reduce((acc,p)=>{ acc[p.type]=p.value; return acc; }, {});
+  return `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute}`;
+}
+fetch('/api/tournaments').then(r=>r.json()).then(items=>{
+  tourGrid.innerHTML = items.map(t=>{
+    const cover = encodeURI((t.page_cover_url || t.cover_url || t.poster_url || t.image_url || '').trim());
+    const bg = cover ? `style="background-image:linear-gradient(180deg, rgba(6,7,11,.18), rgba(6,7,11,.62)), url('${cover}');background-size:cover;background-position:center;"` : '';
+    return `<a class="card stack tournament-list-card" href="/tournament.html?id=${encodeURIComponent(t.id)}" ${bg}>
+      <div class="kicker">${esc((t.mode||'').toUpperCase())} • BO${Number(t.bo||1)}</div>
+      <h3>${esc(t.name)}</h3>
+      <div class="muted">${esc(t.description||'Без описания')}</div>
+      <div class="badge">Регистрация до ${formatHumanMsk(t.registration_until || t.registration_to || t.registrationUntil)}</div>
+    </a>`;
+  }).join('');
+});
+</script><script src="/app.js"></script></body></html>

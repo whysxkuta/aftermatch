@@ -1,0 +1,18 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Чаты — aftermatch.ru</title><link rel="stylesheet" href="/style.css"></head><body><div class="shell-page"><section class="glass-panel"><div class="panel-body chat-layout"><div class="chat-list"><div><div class="kicker">social</div><h2>Чаты</h2></div><div id="chatsWrap" class="list" style="margin-top:12px"></div></div><div class="chat-thread"><div id="chatHead" class="list-item">Выберите чат</div><div id="chatMessages" class="chat-messages"></div><div class="row gap" style="margin-top:12px"><input id="chatInput" placeholder="Сообщение" /><button id="sendChatBtn" class="btn">Отправить</button></div></div></div></section></div><script>
+const params = new URLSearchParams(location.search); let currentChatId = params.get('chat') || null; let meId = null;
+function esc(v=''){ return String(v).replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s])); }
+function titleFor(chat){ return (chat.members||[]).map(m=>m.nickname).join(', ') || 'Чат'; }
+async function loadMessages(){ if(!currentChatId){ chatMessages.innerHTML='<div class="muted">Выберите чат слева</div>'; return; } const r=await fetch(`/api/chats/${encodeURIComponent(currentChatId)}/messages`,{credentials:'include'}); const rows=await r.json().catch(()=>[]); chatMessages.innerHTML=(rows||[]).map(m=>`<div class="chat-msg ${m.sender_user_id===meId?'me':''}"><div class="tiny">${esc(m.nickname||'')}</div><div>${esc(m.text||'')}</div></div>`).join('') || '<div class="muted">Пока пусто</div>'; chatMessages.scrollTop=chatMessages.scrollHeight; }
+async function loadChats(){
+  const me = await fetch('/api/auth/me',{credentials:'include'}).then(r=>r.ok?r.json():{user:null}); meId = me.user?.id || null;
+  const chats=await fetch('/api/chats',{credentials:'include'}).then(r=>r.ok?r.json():[]);
+  if(!currentChatId && chats[0]) currentChatId = chats[0].id;
+  chatsWrap.innerHTML=(chats||[]).length?(chats||[]).map(c=>`<button class="list-item" style="width:100%;text-align:left;${c.id===currentChatId?'border-color:rgba(103,175,255,.45);':''}" onclick="selectChat('${c.id}')"><div>${esc(titleFor(c))}</div><div class="tiny">${esc(c.lastMessage?.text||'Пока пусто')}</div></button>`).join(''):'<div class="muted">Пока нет чатов</div>';
+  const active = (chats||[]).find(c=>c.id===currentChatId); chatHead.innerHTML = active ? `<b>${esc(titleFor(active))}</b>` : 'Выберите чат';
+  await loadMessages();
+}
+function selectChat(id){ currentChatId=id; history.replaceState({},'',`/chats.html?chat=${encodeURIComponent(id)}`); loadChats(); }
+sendChatBtn.addEventListener('click', async()=>{ const text=chatInput.value.trim(); if(!text||!currentChatId) return; const r=await fetch(`/api/chats/${encodeURIComponent(currentChatId)}/messages`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})}); const d=await r.json().catch(()=>({})); if(!r.ok) return showToast(d.error||'Ошибка'); chatInput.value=''; loadMessages(); });
+chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatBtn.click(); });
+loadChats(); setInterval(()=>{ if(document.visibilityState==='visible') loadChats(); }, 7000);
+</script><script src="/app.js"></script></body></html>
