@@ -1,0 +1,6 @@
+{
+  "ApiUrl": "http://localhost:3000/api/match-agent",
+  "ServerId": "cs2-1",
+  "ServerToken": "CHANGE_ME",
+  "PollSeconds": 5
+}
